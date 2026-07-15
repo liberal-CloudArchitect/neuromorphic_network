@@ -1,50 +1,68 @@
 ---
 title: 统计分析协议
-status: DRAFT
+status: ACCEPTED
 phase: P0
 gate: GATE-0
 last_updated: 2026-07-15
 ---
 
-# 统计分析协议（DRAFT）
+# 统计分析与复现协议
 
-> 本协议是预注册模板。具体 seed、样本量、bootstrap 方法和容差尚未冻结。
+本文冻结 P1 及后续模块实验的重复单位、置信区间、多重比较、失败 run 和数值容差。smoke、探索性和 confirmatory 结果必须分开标记。
 
-## 分析单位与重复
+## 分析单位与 seed
 
-- 正式模型比较以独立训练 seed 为主要重复单位，完整模型和公平基线各至少 3 seeds。
-- episode/token 不能伪装成独立训练重复；可用于 seed 内不确定性分析，但必须分层处理。
-- smoke run、调参 run 与正式 confirmatory run 分开标记，测试集不得用于选择配置。
+- 独立训练 seed 是模型比较的主要重复单位；同一 seed 的模型使用相同数据 sample index 和评估样本，构成配对。
+- P1 Associative Recall GRU 正式 seeds 固定为 `[17, 29, 43]`；seed `7` 只用于三任务 smoke，不进入 confirmatory CI。
+- episode/sample 是 seed 内观测，不得伪装为独立训练重复。token 只用于计算 mask 后的指标，不作为独立重复。
+- bootstrap RNG seed 固定为 `20260715`；重采样次数固定为 10,000，报告双侧 percentile 95% CI。
 
-## 预注册字段
+## 分层配对 bootstrap
 
-| 字段 | 值 |
-|---|---|
-| 主假说与方向 | 待填 |
-| 主指标与聚合方式 | 待填 |
-| 最小有意义效应 | 待填 |
-| seed 列表/生成规则 | 待填 |
-| bootstrap 单位、次数、区间方法 | 待填 |
-| 多重比较校正 | 待填 |
-| 缺失、失败与异常 run 规则 | 待填 |
-| 停止规则 | 待填 |
+比较模型 A 与 B 时，每次重采样执行：
 
-## 报告要求
+1. 有放回抽取训练 seed，A/B 保持同 seed 配对；
+2. 在被抽中的 seed 内，按预注册任务 strata 有放回抽取相同 sample index，A/B 保持样本配对；
+3. 计算各 seed 指标差，再对 seed 等权平均；
+4. 取 2.5% 和 97.5% percentile 作为区间。
 
-- 同时报告每个 seed、中心趋势、95% CI、绝对/相对效应量和计算成本。
-- 收益方向使用配对或分层 bootstrap（设计允许时）；方法与重采样单位必须随报告记录。
-- 预注册模块阈值：情景记忆消融 ≥15pp、工作记忆消融 ≥10pp、预测器 probe 或样本效率恶化 ≥10%。
-- 网络总体五类收益至少两项达标；不得用事后新增指标替换失败的主指标。
-- 显著但低于最小效应的结果记为“统计支持但工程收益不足”。
-- CI 跨 0、方差过大、数值失败或无法公平匹配时，报告失败/不确定，不得写成通过。
+strata 冻结为：Associative Recall 的 pair-count × interference-count bucket；Delayed Rule Switch 的 delay bucket × switch/no-switch；SmallGraph-v1 的 node-count × shortest-path-length bucket。空 strata 不补样本，实际 strata 数量随报告披露。
 
-## 可复现性与数值容差
+单模型绝对指标也使用相同步骤但不做 A/B 差值。只有三个训练 seed 时 CI 精度有限，必须同时报告所有 seed，不用窄区间措辞夸大确定性。
 
-- 固定 checkpoint/input 的 telemetry on/off 推理输出使用预注册 `allclose(rtol, atol)`。
-- 单训练步比较 loss、所有可训练参数 gradient 和 optimizer update 的 `allclose`。
-- 同 seed 完整训练比较主指标分布，容差由任务和设备在正式运行前登记。
-- 跨 CPU/MPS/CUDA 的非确定性必须披露，不以不现实的逐位相同作为默认要求。
+## 主指标与方向
 
-## 偏差记录
+| 范围 | 主指标 | 预期方向 / 最小效应 |
+|---|---|---|
+| Associative Recall | query accuracy | 情景记忆消融差 ≥15pp；总体任务收益相对 ≥5% |
+| Delayed Rule Switch | response accuracy | 工作记忆消融差 ≥10pp；switch cost 更低 |
+| SmallGraph-v1 | success rate | 预测器达标样本数减少 ≥10%；总体样本效率门槛 ≥15% |
+| 稀疏路由 | 主任务分数与活跃 MAC 联合 | 分数非劣界限 2%，活跃 MAC 减少 ≥20% |
+| 网络总体 | 五类预注册收益 | 至少两类达到门槛且对应 95% CI 支持预期方向 |
 
-任何改变假说、指标、阈值、seed、预算、排除规则或统计方法的操作都必须形成带时间、原因、影响和 commit hash 的 deviation record；探索性结果与验证性结果分开呈现。
+`pp` 表示绝对百分点；“相对提高”定义为 `(model - baseline) / abs(baseline)`。基线为零时只报告绝对差，不计算相对值。
+
+## 多重比较
+
+- confirmatory family 由同一 Gate 中所有“模型优于主基线”的主指标比较组成；在查看结果前固定 family。
+- 对每个比较由配对 bootstrap 计算双侧 p 值：`2 * min(P(delta <= 0), P(delta >= 0))`，最小值为 `1/10000`。
+- 使用 Holm step-down 方法控制 family-wise α=0.05；同时报告原始 p、Holm 调整 p、效应量和 CI。
+- 模块专用阈值、OOD 次指标和成本敏感性均报告，但除非预注册为主比较，不可替换失败主指标。
+
+## 失败、缺失与停止
+
+- 配置或 fixture 验证失败在训练前标记 `INVALID`；启动后 NaN、梯度异常、资源超限或中断标记 `FAILED`，均保留 manifest。
+- confirmatory seed 不得替换。若任一比较模型缺少配对 seed，该 seed 不进入效应估计，同时报告缺失原因；成功 seed 少于 3 时结论为 `INCONCLUSIVE`，不能通过科学 Gate。
+- validation 早停固定为每 100 steps、patience 10、`min_delta=0.001`，最多 5,000 steps。test/OOD 只评估所选 checkpoint 一次。
+- 不允许根据 test/OOD、显著性或 CI 延长预算、增加 seed 或修改 strata；任何变化建立新 protocol version 和 deviation record。
+
+## 数值复现容差
+
+- CPU 同 checkpoint、数据顺序和恢复游标的连续训练与恢复训练要求模型/优化器状态及后续指标逐位一致。
+- MPS checkpoint 恢复后的张量使用 `allclose(rtol=1e-5, atol=1e-6)`，主指标绝对差 ≤`1e-4`。CUDA 在对应硬件上另行冻结，不能从 MPS 推测。
+- telemetry on/off：固定 checkpoint/input 的 packet 与 logits 使用同设备上述 `allclose`；单训练步 loss、所有 gradient 和 optimizer update 使用相同容差；整段训练主指标差 ≤`1e-4`。
+- 跨 CPU/MPS 只要求指标和误差在单独报告的容差内，不默认逐位一致；device、PyTorch 版本和确定性设置必须记录。
+
+## 报告字段
+
+每份正式报告必须包含全部 seed、均值/中位数、绝对与相对效应、10,000 次 bootstrap 95% CI、原始与 Holm 调整 p、失败/缺失 run、参数量、MAC coverage、P50/P95 latency、wall-clock 和峰值内存。CI 跨 0、效应低于门槛、匹配失败或成功 seed 少于 3 时分别写为“不支持”“工程收益不足”“比较无效”或“不确定”，不得写成通过。

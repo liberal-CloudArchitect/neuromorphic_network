@@ -1,10 +1,29 @@
-schema_version: 0-draft
-status: DRAFT
-modules:
-  - sensory_encoder
-  - episodic_memory
-  - working_memory
-  - predictive_adapter
-  - action_selector
-  - sparse_router
-note: Configuration values remain unset until GATE-0 freezes module hypotheses.
+schema_version: modules-v1
+status: ACCEPTED
+module_ids:
+  sensory_encoder: sensory_encoder.v1
+  episodic_memory: episodic_memory.v1
+  working_memory: working_memory.v1
+  predictive_adapter: predictive_adapter.v1
+  action_selector: action_selector.v1
+  sparse_router: sparse_router.v1
+routing:
+  granularity: step
+  top_k: 2
+  optional_experts:
+    - episodic_memory.v1
+    - working_memory.v1
+    - predictive_adapter.v1
+  required_path:
+    - sensory_encoder.v1
+    - sparse_router.v1
+    - action_selector.v1
+  sparsity_excludes_required_path: true
+lifecycle:
+  episodic_memory_order: read-before-write
+  prediction_error_updates_current_state: false
+  reset_transient_state_at_episode_boundary: true
+  tbptt_detach_steps: 32
+scientific_disclaimer: >-
+  These identifiers describe artificial computation modules and do not imply
+  one-to-one biological equivalence with brain regions.

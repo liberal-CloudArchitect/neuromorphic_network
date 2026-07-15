@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://neuromorphic.local/schemas/telemetry-v1.json",
-  "title": "Neuromorphic module telemetry v1 (DRAFT)",
-  "description": "DRAFT P0 observability schema for artificial model activity. It does not freeze BrainPacket or ModuleOutput, does not imply GATE-0 approval, and contains no atlas or viewer dependency.",
-  "x-status": "DRAFT",
+  "title": "Neuromorphic artificial module telemetry v1",
+  "description": "Accepted P0 observability contract for artificial model activity. It contains no atlas, web, or viewer dependency.",
+  "x-status": "ACCEPTED",
   "x-scientific-disclaimer": "Artificial model telemetry; not BOLD, biological neural activity, or a clinical measurement.",
   "type": "object",
   "additionalProperties": false,
@@ -31,118 +31,61 @@
     "confidence",
     "event_tags",
     "dropped_since_last",
-    "edges"
+    "edges",
+    "metadata",
+    "grad_rms",
+    "update_rms"
   ],
   "properties": {
-    "schema_version": {
-      "const": "telemetry-v1-draft"
-    },
-    "event_id": {
-      "type": "string",
-      "minLength": 1
-    },
-    "parent_event_id": {
-      "type": ["string", "null"]
-    },
-    "run_id": {
-      "type": "string",
-      "minLength": 1
-    },
-    "episode_id": {
-      "type": ["string", "integer"]
-    },
-    "step": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "token_id": {
-      "type": ["integer", "null"],
-      "minimum": 0
-    },
-    "monotonic_time_ns": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "module_clock": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "phase": {
-      "enum": ["train", "evaluate", "generate", "replay"]
-    },
+    "schema_version": {"const": "telemetry-v1"},
+    "event_id": {"type": "string", "minLength": 1},
+    "parent_event_id": {"type": ["string", "null"]},
+    "run_id": {"type": "string", "minLength": 1},
+    "episode_id": {"type": ["string", "integer"]},
+    "step": {"type": "integer", "minimum": 0},
+    "token_id": {"type": ["integer", "null"], "minimum": 0},
+    "monotonic_time_ns": {"type": "integer", "minimum": 0},
+    "module_clock": {"type": "integer", "minimum": 0},
+    "phase": {"enum": ["train", "evaluate", "generate", "replay"]},
     "module_id": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Versioned registry identifier. Expected P0 families include sensory encoding, episodic memory, working memory, predictive adaptation, action selection, and sparse routing; identifiers are not frozen by this draft."
+      "enum": [
+        "sensory_encoder.v1",
+        "episodic_memory.v1",
+        "working_memory.v1",
+        "predictive_adapter.v1",
+        "action_selector.v1",
+        "sparse_router.v1"
+      ]
     },
-    "source": {
-      "type": "string",
-      "minLength": 1
-    },
-    "reducer_version": {
-      "type": "string",
-      "minLength": 1
-    },
-    "baseline_version": {
-      "type": "string",
-      "minLength": 1
-    },
-    "compute_gate": {
-      "type": "boolean"
-    },
-    "activity_raw": {
-      "type": ["number", "null"]
-    },
-    "activity_z": {
-      "type": ["number", "null"]
-    },
-    "routing_mass": {
-      "type": ["number", "null"],
-      "minimum": 0
-    },
-    "state_change": {
-      "type": ["number", "null"],
-      "minimum": 0
-    },
-    "surprise": {
-      "type": ["number", "null"],
-      "minimum": 0
-    },
-    "confidence": {
-      "type": ["number", "null"],
-      "minimum": 0,
-      "maximum": 1
-    },
-    "grad_rms": {
-      "type": ["number", "null"],
-      "minimum": 0
-    },
-    "update_rms": {
-      "type": ["number", "null"],
-      "minimum": 0
-    },
+    "source": {"type": "string", "minLength": 1},
+    "reducer_version": {"type": "string", "minLength": 1},
+    "baseline_version": {"type": "string", "minLength": 1},
+    "compute_gate": {"type": "boolean"},
+    "activity_raw": {"type": ["number", "null"]},
+    "activity_z": {"type": ["number", "null"]},
+    "routing_mass": {"type": ["number", "null"], "minimum": 0},
+    "state_change": {"type": ["number", "null"], "minimum": 0},
+    "surprise": {"type": ["number", "null"], "minimum": 0},
+    "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "grad_rms": {"type": ["number", "null"], "minimum": 0},
+    "update_rms": {"type": ["number", "null"], "minimum": 0},
     "event_tags": {
       "type": "array",
-      "items": {
-        "enum": ["retrieve", "write", "select", "interrupt", "replay", "predict", "route"]
-      },
+      "items": {"enum": ["retrieve", "write", "select", "interrupt", "replay", "predict", "route"]},
       "uniqueItems": true
     },
-    "dropped_since_last": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "edges": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/edge"
-      }
-    },
+    "dropped_since_last": {"type": "integer", "minimum": 0},
+    "edges": {"type": "array", "items": {"$ref": "#/$defs/edge"}},
     "metadata": {
       "type": "object",
-      "description": "Bounded scalar/string metadata only; raw tensors are forbidden.",
+      "description": "At most 32 bounded scalar values; raw tensors and nested objects are forbidden.",
       "additionalProperties": {
-        "type": ["string", "number", "integer", "boolean", "null"]
+        "oneOf": [
+          {"type": "string", "maxLength": 256},
+          {"type": "number", "minimum": -1000000000000, "maximum": 1000000000000},
+          {"type": "boolean"},
+          {"type": "null"}
+        ]
       },
       "maxProperties": 32
     }
@@ -151,20 +94,20 @@
     "edge": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["target_module_id", "flow"],
+      "required": ["target_module_id", "flow", "routed"],
       "properties": {
         "target_module_id": {
-          "type": "string",
-          "minLength": 1
+          "enum": [
+            "sensory_encoder.v1",
+            "episodic_memory.v1",
+            "working_memory.v1",
+            "predictive_adapter.v1",
+            "action_selector.v1",
+            "sparse_router.v1"
+          ]
         },
-        "flow": {
-          "type": "number",
-          "minimum": 0
-        },
-        "routed": {
-          "type": "boolean",
-          "default": false
-        }
+        "flow": {"type": "number", "minimum": 0},
+        "routed": {"type": "boolean"}
       }
     }
   }

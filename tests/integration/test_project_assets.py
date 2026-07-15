@@ -40,14 +40,16 @@ def test_all_json_schemas_are_valid() -> None:
         validator.check_schema(schema)
 
 
-def test_telemetry_schema_remains_an_unfrozen_draft() -> None:
+def test_telemetry_schema_is_the_accepted_model_only_contract() -> None:
     path = ROOT / "schemas" / "telemetry-v1.json"
     schema = json.loads(path.read_text(encoding="utf-8"))
-    assert schema["x-status"] == "DRAFT"
-    assert schema["properties"]["schema_version"]["const"] == "telemetry-v1-draft"
+    assert schema["x-status"] == "ACCEPTED"
+    assert schema["properties"]["schema_version"]["const"] == "telemetry-v1"
+    forbidden_fields = {"atlas", "atlas_id", "roi", "roi_id", "viewer", "websocket"}
+    assert forbidden_fields.isdisjoint(schema["properties"])
 
 
-def test_p0_templates_remain_explicit_drafts() -> None:
+def test_p0_specifications_are_accepted_and_structured() -> None:
     template_names = (
         "evidence_registry.md",
         "module_hypotheses.md",
@@ -62,5 +64,5 @@ def test_p0_templates_remain_explicit_drafts() -> None:
         path = ROOT / "docs" / name
         content = path.read_text(encoding="utf-8")
         headings = [line for line in content.splitlines() if line.startswith("#")]
-        assert "DRAFT" in content, f"P0 template must be marked DRAFT: {path}"
-        assert len(headings) >= 3, f"P0 template lacks required structure: {path}"
+        assert "status: ACCEPTED" in content, f"P0 specification not accepted: {path}"
+        assert len(headings) >= 3, f"P0 specification lacks required structure: {path}"

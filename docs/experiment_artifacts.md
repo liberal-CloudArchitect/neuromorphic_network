@@ -1,14 +1,14 @@
 ---
 title: 实验产物与证据存档
-status: DRAFT
+status: ACCEPTED
 phase: P0
 gate: GATE-0
 last_updated: 2026-07-15
 ---
 
-# 实验产物与证据存档规则（DRAFT）
+# 实验产物与证据存档规则
 
-> 本规则尚未完成治理评审；目录或模板存在不代表任何实验有效或 Gate 已通过。
+> 本规则已作为 P0 产物治理规范接受；规范存在不代表任何实验有效或 Gate 已通过。
 
 ## Run ID
 
@@ -27,7 +27,7 @@ last_updated: 2026-07-15
 | statistical report | Markdown/JSON | 每 seed、CI、效应量、阈值、成本、失败与偏差 |
 | gate report | Markdown | Test ID、证据链接、commit hash、评审裁决与签署 |
 
-## 目录草案
+## 目录规范
 
 ```text
 artifacts/runs/<run_id>/
@@ -46,15 +46,15 @@ artifacts/runs/<run_id>/
 ## 证据链与状态
 
 - `DONE` 任务必须链接到具体 commit、测试、run manifest、统计报告或评审记录。
-- `DRAFT` 文档、空目录、smoke 和单 seed 结果不能作为 Gate 通过证据。
+- 未评审文档、空目录、smoke 和单 seed 结果不能作为 Gate 通过证据。
 - 每份 Gate 报告记录被评审 commit hash；dirty worktree 的结果默认不可作为正式证据。
 - 失败和中断 run 保留 manifest、日志、退出原因和最后 checkpoint，不得静默删除。
 - 产物 schema 迁移必须保留原始文件、迁移工具版本和校验前后 checksum。
 
 ## 完整性检查
 
-- [ ] manifest 可解析且引用的配置、环境和数据版本存在。
-- [ ] checksum 校验通过，run ID 唯一且父子关系无环。
-- [ ] 结果可从 fresh 环境按记录命令复现。
-- [ ] telemetry 不含无界原始张量或敏感输入，并可在不影响训练语义时关闭。
-- [ ] 报告包含失败、方差、成本、限制和替代解释。
+- [x] manifest 规范要求可解析且引用的配置、环境和数据版本存在。
+- [x] checksum 规范要求校验通过，run ID 唯一且父子关系无环。
+- [x] 正式结果规范要求可从 fresh 环境按记录命令复现。
+- [x] telemetry 规范禁止无界原始张量或敏感输入，并要求可关闭。
+- [x] 报告规范包含失败、方差、成本、限制和替代解释。
