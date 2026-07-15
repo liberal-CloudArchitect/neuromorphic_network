@@ -1,0 +1,50 @@
+# macOS and editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+coverage.xml
+htmlcov/
+build/
+dist/
+
+# Local environments and secrets
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+env/
+.conda/
+
+# Research data and generated outputs
+data/
+artifacts/**
+!artifacts/README.md
+checkpoints/
+runs/
+logs/
+*.ckpt
+*.pt
+*.pth
+
+# Optional visualization build products
+visualization/**/node_modules/
+visualization/**/dist/
+visualization/**/.next/
+
+# OMX runtime state: retain plans, ignore machine/session state
+.omx/logs/
+.omx/state/
+.omx/metrics.json
+.omx/notepad.md

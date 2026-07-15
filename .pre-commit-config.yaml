@@ -1,0 +1,18 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: Ruff lint
+        entry: ruff check --force-exclude
+        language: system
+        types_or: [python, pyi]
+      - id: ruff-format-check
+        name: Ruff format check
+        entry: ruff format --check --force-exclude
+        language: system
+        types_or: [python, pyi]
+      - id: repository-hygiene
+        name: Repository file hygiene
+        entry: python scripts/check_repository_hygiene.py
+        language: system
+        types: [text]

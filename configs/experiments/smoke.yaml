@@ -1,0 +1,7 @@
+schema_version: 0-draft
+status: DRAFT
+seed: 0
+device: auto
+task: null
+model: null
+note: No task or model is implemented during repository initialization.

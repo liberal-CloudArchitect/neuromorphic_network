@@ -1,0 +1,8 @@
+name: brain
+channels:
+  - defaults
+dependencies:
+  - python=3.12
+  - pip
+  - setuptools
+  - wheel

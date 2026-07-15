@@ -1,0 +1,10 @@
+schema_version: 0-draft
+status: DRAFT
+modules:
+  - sensory_encoder
+  - episodic_memory
+  - working_memory
+  - predictive_adapter
+  - action_selector
+  - sparse_router
+note: Configuration values remain unset until GATE-0 freezes module hypotheses.

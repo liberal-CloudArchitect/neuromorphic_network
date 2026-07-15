@@ -1,0 +1,5 @@
+schema_version: 0-draft
+status: DEFERRED
+enabled: false
+mappings: []
+note: Optional visualization mapping; it must not define network structure.
