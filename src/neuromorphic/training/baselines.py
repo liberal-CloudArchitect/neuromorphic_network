@@ -130,7 +130,7 @@ class TransformerBaseline(nn.Module):
             batch_first=True,
             norm_first=False,
         )
-        self.encoder = nn.TransformerEncoder(layer, num_layers=layers)
+        self.encoder = nn.TransformerEncoder(layer, num_layers=layers, enable_nested_tensor=False)
         self.output_head = nn.Linear(hidden_size, num_classes)
         self.next_state_head = (
             None if auxiliary_classes is None else nn.Linear(hidden_size, auxiliary_classes)
