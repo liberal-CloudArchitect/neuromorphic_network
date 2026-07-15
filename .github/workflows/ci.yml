@@ -50,3 +50,6 @@ jobs:
 
       - name: CPU smoke test
         run: python scripts/check_environment.py --require cpu
+
+      - name: P1 deterministic training smoke
+        run: make smoke-p1

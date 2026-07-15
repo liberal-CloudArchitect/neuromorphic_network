@@ -1,0 +1,55 @@
+schema_version: task-profiles-v1
+determinism:
+  sample_identity: [task_version, split_seed, sample_index]
+  split_seeds:
+    train: 1101
+    validation: 2201
+    test: 3301
+    ood: 4401
+  content_hash: sha256
+
+profiles:
+  smoke:
+    seed: 7
+    samples:
+      train: 64
+      validation: 32
+      test: 32
+      ood: 32
+    max_training_steps: 200
+  qualification:
+    seeds: [17, 29, 43]
+    samples:
+      train: 8192
+      validation: 2048
+      test: 2048
+      ood: 2048
+    max_training_steps: 5000
+
+tasks:
+  associative_recall.v1:
+    id:
+      pairs: [4, 8]
+      distractors: [0, 4]
+    ood:
+      pairs: [9, 12]
+      distractors: [5, 8]
+    primary_metrics: [query_accuracy, interference_drop]
+  delayed_rule_switch.v1:
+    id:
+      delay: [2, 8]
+      switch_positions: [2]
+      maximum_switches: 1
+    ood:
+      delay: [9, 16]
+      switch_positions: [3]
+    primary_metrics: [response_accuracy, switch_cost]
+  small_graph.v1:
+    id:
+      nodes: [6, 10]
+    ood:
+      nodes: [11, 16]
+    maximum_action_slots: 4
+    tie_policy: multi_hot_optimal_action_mask
+    auxiliary_target: next_state
+    primary_metrics: [success_rate, path_excess, next_state_accuracy]

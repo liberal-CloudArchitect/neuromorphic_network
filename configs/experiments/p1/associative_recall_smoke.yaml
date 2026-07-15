@@ -1,0 +1,27 @@
+schema_version: run-config-v1
+seed: 7
+device: auto
+output_root: artifacts/runs
+task:
+  task_id: associative_recall.v1
+  profile: smoke
+model:
+  kind: gru
+  hidden_size: 32
+  layers: 1
+  heads: 4
+  feedforward_size: 128
+  dropout: 0.0
+optimizer:
+  learning_rate: 0.003
+  weight_decay: 0.0
+  gradient_clip_norm: 1.0
+training:
+  batch_size: 16
+  max_steps: 200
+  eval_interval: 25
+  patience: 8
+  min_delta: 0.001
+  tbptt_steps: 32
+  checkpoint_interval: 25
+  auxiliary_loss_weight: 0.1
