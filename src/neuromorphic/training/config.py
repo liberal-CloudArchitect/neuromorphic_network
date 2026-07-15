@@ -61,6 +61,7 @@ class TrainingConfig(StrictModel):
     target_optimizer_steps: int | None = Field(default=None, ge=1)
     target_training_tokens: int | None = Field(default=None, ge=1)
     compute_tolerance: float = Field(default=0.05, gt=0.0, le=0.25)
+    require_loss_decrease: bool = False
 
 
 class RunConfig(StrictModel):

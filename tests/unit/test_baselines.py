@@ -89,3 +89,5 @@ def test_mac_profile_discloses_coverage(kind: str) -> None:
     assert profile.estimated_macs > 0
     assert 0.95 <= profile.coverage <= 1.0
     assert profile.supported_parameters <= profile.total_parameters
+    assert sum(operator.estimated_macs for operator in profile.operators) == profile.estimated_macs
+    assert all(operator.calls >= 1 and operator.input_shape for operator in profile.operators)

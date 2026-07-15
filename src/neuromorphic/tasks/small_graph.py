@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from functools import lru_cache
 
 import torch
 from torch import Tensor
@@ -141,6 +142,7 @@ class SmallGraphTask:
         observation[offset : offset + self.max_actions] = action_nodes.ge(0).to(torch.float32)
         return observation
 
+    @lru_cache(maxsize=32_768)  # noqa: B019 - bounded task instances live for one run
     def _make_sample(self, split: DatasetSplit, sample_index: int) -> _Sample:
         graph = self._make_graph(split, sample_index)
         distances = self._distances(graph.adjacency, graph.goal, graph.node_count)

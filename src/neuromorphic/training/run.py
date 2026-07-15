@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import sys
+from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -104,6 +105,17 @@ def execute(config: RunConfig) -> dict[str, Any]:
     sample = task.generate("train", [0])
     parameters = trainable_parameter_count(model)
     mac_profile = profile_macs(model, sample.sequence_length)
+    effective_model = config.model.model_dump(mode="json")
+    effective_model["effective_hidden_size"] = getattr(model, "hidden_size", None)
+    effective_model["effective_layers"] = getattr(model, "layers", None)
+    effective_model["effective_feedforward_size"] = getattr(model, "feedforward_size", None)
+    if config.model.target_parameters is not None:
+        effective_model["parameter_match"] = {
+            "target": config.model.target_parameters,
+            "actual": parameters,
+            "relative_error": abs(parameters - config.model.target_parameters)
+            / config.model.target_parameters,
+        }
     if config.model.target_macs is not None:
         _validate_match(
             "MAC",
@@ -121,7 +133,7 @@ def execute(config: RunConfig) -> dict[str, Any]:
         seed=config.seed,
         device=device,
         task={"task_id": config.task.task_id, "profile": config.task.profile},
-        model=config.model.model_dump(mode="json"),
+        model=effective_model,
         optimizer=config.optimizer.model_dump(mode="json"),
         data=data,
         budget=config.training.model_dump(mode="json"),
@@ -129,6 +141,7 @@ def execute(config: RunConfig) -> dict[str, Any]:
         estimated_macs=mac_profile.estimated_macs,
         mac_coverage=mac_profile.coverage,
         unsupported_parameters=mac_profile.unsupported_parameters,
+        mac_operators=[asdict(operator) for operator in mac_profile.operators],
     )
     write_manifest(run_directory / "manifest.json", manifest)
     try:
@@ -160,7 +173,7 @@ def execute(config: RunConfig) -> dict[str, Any]:
                 config.model.target_latency_ms,
                 config.model.cost_tolerance,
             )
-    except Exception as error:
+    except BaseException as error:
         manifest["status"] = "failed"
         manifest["failure"] = {"type": type(error).__name__, "message": str(error)}
         manifest["artifacts"] = {
@@ -176,6 +189,12 @@ def execute(config: RunConfig) -> dict[str, Any]:
     manifest["status"] = "completed"
     manifest["cost"]["latency_ms"] = summary["latency_ms"]
     manifest["cost"]["wall_clock_seconds"] = summary["wall_clock_seconds"]
+    manifest["cost"]["peak_memory_bytes"] = summary["peak_memory_bytes"]
+    manifest["cost"]["peak_memory_method"] = summary["peak_memory_method"]
+    manifest["budget"]["actual_optimizer_steps"] = summary["steps"]
+    manifest["budget"]["actual_training_examples"] = summary["training_examples"]
+    manifest["budget"]["actual_training_tokens"] = summary["training_tokens"]
+    manifest["budget"]["actual_validation_evaluations"] = summary["validation_evaluations"]
     manifest["artifacts"] = {
         path.name: {"sha256": file_sha256(path)}
         for path in run_directory.iterdir()

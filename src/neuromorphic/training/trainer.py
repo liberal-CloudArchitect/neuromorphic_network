@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import resource
+import sys
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -13,15 +15,19 @@ import numpy as np
 import torch
 from torch import nn
 
+from neuromorphic.evaluation.task_metrics import (
+    EvaluationRecord,
+    aggregate_records,
+    evaluation_records,
+)
 from neuromorphic.tasks.base import DatasetSplit, SequenceTask, TaskBatch
 from neuromorphic.tasks.small_graph import SmallGraphTask
-from neuromorphic.training.baselines import BaselineOutput
+from neuromorphic.training.baselines import BaselineOutput, GRUBaseline
 from neuromorphic.training.checkpoint import load_checkpoint, save_checkpoint
 from neuromorphic.training.config import RunConfig
 from neuromorphic.training.metrics import (
     ensure_finite_training_state,
     masked_task_loss,
-    task_metrics,
 )
 
 
@@ -101,11 +107,32 @@ def evaluate_model(
     size: int,
     batch_size: int,
     device: torch.device,
-) -> dict[str, float]:
+) -> dict[str, object]:
     """Evaluate a baseline over a deterministic split."""
+    metrics, _ = evaluate_model_with_records(
+        model,
+        task,
+        split=split,
+        size=size,
+        batch_size=batch_size,
+        device=device,
+    )
+    return metrics
+
+
+def evaluate_model_with_records(
+    model: nn.Module,
+    task: SequenceTask,
+    *,
+    split: DatasetSplit,
+    size: int,
+    batch_size: int,
+    device: torch.device,
+    run_seed: int | None = None,
+) -> tuple[dict[str, object], list[EvaluationRecord]]:
+    """Evaluate a split and retain task-specific per-sample evidence."""
     model.eval()
-    totals: dict[str, float] = {}
-    weight = 0
+    records: list[EvaluationRecord] = []
     with torch.no_grad():
         for start in range(0, size, batch_size):
             indices = list(range(start, min(start + batch_size, size)))
@@ -113,14 +140,35 @@ def evaluate_model(
             output = model(batch.inputs, batch.valid_mask)
             if not isinstance(output, BaselineOutput):
                 raise TypeError("baseline model must return BaselineOutput")
-            values = task_metrics(output, batch)
-            batch_weight = int(batch.loss_mask.sum().item())
-            for name, value in values.items():
-                totals[name] = totals.get(name, 0.0) + value * batch_weight
-            weight += batch_weight
-    if weight == 0:
-        raise ValueError("evaluation split contains no supervised positions")
-    return {name: value / weight for name, value in totals.items()}
+            records.extend(evaluation_records(output, batch, run_seed=run_seed))
+    return aggregate_records(records), records
+
+
+def forward_training_batch(
+    model: nn.Module, batch: TaskBatch, *, tbptt_steps: int
+) -> BaselineOutput:
+    """Run a training forward pass with recurrent state detached at TBPTT boundaries."""
+    if not isinstance(model, GRUBaseline) or batch.sequence_length <= tbptt_steps:
+        output = model(batch.inputs, batch.valid_mask)
+        if not isinstance(output, BaselineOutput):
+            raise TypeError("baseline model must return BaselineOutput")
+        return output
+    hidden: torch.Tensor | None = None
+    logits: list[torch.Tensor] = []
+    next_state_logits: list[torch.Tensor] = []
+    for start in range(0, batch.sequence_length, tbptt_steps):
+        stop = min(start + tbptt_steps, batch.sequence_length)
+        output, hidden = model.forward_chunk(
+            batch.inputs[:, start:stop], batch.valid_mask[:, start:stop], hidden
+        )
+        hidden = hidden.detach()
+        logits.append(output.logits)
+        if output.next_state_logits is not None:
+            next_state_logits.append(output.next_state_logits)
+    return BaselineOutput(
+        logits=torch.cat(logits, dim=1),
+        next_state_logits=(torch.cat(next_state_logits, dim=1) if next_state_logits else None),
+    )
 
 
 def _append_jsonl(path: Path, value: Mapping[str, Any]) -> None:
@@ -129,13 +177,13 @@ def _append_jsonl(path: Path, value: Mapping[str, Any]) -> None:
 
 
 def measure_latency_ms(
-    model: nn.Module, batch: TaskBatch, *, samples: int = 20
-) -> dict[str, float | int]:
+    model: nn.Module, batch: TaskBatch, *, warmup: int = 10, samples: int = 50
+) -> dict[str, object]:
     """Measure end-to-end baseline forward P50/P95 latency for one batch."""
     model.eval()
     measurements: list[float] = []
     with torch.no_grad():
-        for _ in range(3):
+        for _ in range(warmup):
             model(batch.inputs, batch.valid_mask)
         for _ in range(samples):
             if batch.inputs.device.type == "mps":
@@ -153,7 +201,26 @@ def measure_latency_ms(
         "p50": float(np.percentile(measurements, 50)),
         "p95": float(np.percentile(measurements, 95)),
         "samples": samples,
+        "warmup": warmup,
+        "batch_size": batch.batch_size,
+        "sequence_length": batch.sequence_length,
+        "dtype": str(batch.inputs.dtype),
+        "device": str(batch.inputs.device),
+        "sequences_per_second": float(batch.batch_size * 1_000.0 / np.percentile(measurements, 50)),
     }
+
+
+def _device_memory_bytes(device: torch.device) -> tuple[int, str]:
+    if device.type == "cuda":
+        return int(torch.cuda.max_memory_allocated(device)), "torch.cuda.max_memory_allocated"
+    if device.type == "mps":
+        return int(
+            torch.mps.current_allocated_memory()
+        ), "sampled torch.mps.current_allocated_memory"
+    maximum = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+    if sys.platform != "darwin":
+        maximum *= 1024
+    return maximum, "process ru_maxrss"
 
 
 def train_baseline(
@@ -169,6 +236,8 @@ def train_baseline(
     run_directory.mkdir(parents=True, exist_ok=True)
     metrics_path = run_directory / "metrics.jsonl"
     model.to(device)
+    if device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats(device)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=config.optimizer.learning_rate,
@@ -193,6 +262,8 @@ def train_baseline(
     training_examples = 0
     training_tokens = 0
     validation_evaluations = 0
+    loss_history: list[float] = []
+    peak_memory_bytes, peak_memory_method = _device_memory_bytes(device)
     while int(state["step"]) < config.training.max_steps:
         model.train()
         indices = sampler.next(config.training.batch_size)
@@ -200,9 +271,7 @@ def train_baseline(
         training_examples += len(indices)
         training_tokens += int(batch.valid_mask.sum().item())
         optimizer.zero_grad(set_to_none=True)
-        output = model(batch.inputs, batch.valid_mask)
-        if not isinstance(output, BaselineOutput):
-            raise TypeError("baseline model must return BaselineOutput")
+        output = forward_training_batch(model, batch, tbptt_steps=config.training.tbptt_steps)
         loss, loss_parts = masked_task_loss(
             output, batch, auxiliary_weight=config.training.auxiliary_loss_weight
         )
@@ -213,8 +282,12 @@ def train_baseline(
         numerical = {**loss_parts, "gradient_norm": float(gradient_norm.detach().cpu())}
         ensure_finite_training_state(loss=loss, model=model, metrics=numerical)
         optimizer.step()
+        ensure_finite_training_state(loss=loss, model=model, metrics=numerical)
+        sampled_memory, peak_memory_method = _device_memory_bytes(device)
+        peak_memory_bytes = max(peak_memory_bytes, sampled_memory)
         state["step"] = int(state["step"]) + 1
         final_loss = float(loss.detach().cpu())
+        loss_history.append(final_loss)
         _append_jsonl(metrics_path, {"step": state["step"], "split": "train", **numerical})
 
         should_evaluate = int(state["step"]) % config.training.eval_interval == 0
@@ -229,10 +302,36 @@ def train_baseline(
                 batch_size=config.training.batch_size,
                 device=device,
             )
+            if isinstance(task, SmallGraphTask):
+
+                def validation_policy(observation: torch.Tensor) -> torch.Tensor:
+                    with torch.no_grad():
+                        inputs = observation.reshape(1, 1, -1)
+                        mask = torch.ones((1, 1), dtype=torch.bool, device=observation.device)
+                        policy_output = model(inputs, mask)
+                        if not isinstance(policy_output, BaselineOutput):
+                            raise TypeError("baseline model must return BaselineOutput")
+                        return policy_output.logits[0, 0]
+
+                rollout_metrics = task.rollout(
+                    validation_policy,
+                    "validation",
+                    list(range(sizes["validation"])),
+                    device=device,
+                )
+                validation = {**rollout_metrics, **validation}
             _append_jsonl(
                 metrics_path, {"step": state["step"], "split": "validation", **validation}
             )
-            primary = next(iter(validation.values()))
+            primary_name = {
+                "associative_recall.v1": "query_accuracy",
+                "delayed_rule_switch.v1": "response_accuracy",
+                "small_graph.v1": "success_rate",
+            }[task.task_id]
+            primary_value = validation.get(primary_name, next(iter(validation.values())))
+            if isinstance(primary_value, bool) or not isinstance(primary_value, (int, float)):
+                raise TypeError(f"primary metric {primary_name!r} must be numeric")
+            primary = float(primary_value)
             if primary > float(state["best_metric"]) + config.training.min_delta:
                 state["best_metric"] = primary
                 state["stale_evals"] = 0
@@ -261,35 +360,66 @@ def train_baseline(
         if int(state["stale_evals"]) >= config.training.patience:
             break
 
-    elapsed = time.perf_counter() - started
-    test_metrics = evaluate_model(
+    training_wall_clock_seconds = time.perf_counter() - started
+    comparison_window = min(10, len(loss_history))
+    initial_loss_mean = float(np.mean(loss_history[:comparison_window]))
+    final_loss_mean = float(np.mean(loss_history[-comparison_window:]))
+    loss_decreased = final_loss_mean < initial_loss_mean
+    if config.training.require_loss_decrease and not loss_decreased:
+        raise ValueError(
+            f"training loss did not decrease: initial={initial_loss_mean}, final={final_loss_mean}"
+        )
+    completed_steps = int(state["step"])
+    selected_state, _ = load_checkpoint(
+        run_directory / "best.pt",
+        model=model,
+        optimizer=optimizer,
+        scheduler=None,
+        config=compatible_config,
+        restore_rng=False,
+    )
+    test_metrics, test_records = evaluate_model_with_records(
         model,
         task,
         split="test",
         size=sizes["test"],
         batch_size=config.training.batch_size,
         device=device,
+        run_seed=config.seed,
     )
-    ood_metrics = evaluate_model(
+    ood_metrics, ood_records = evaluate_model_with_records(
         model,
         task,
         split="ood",
         size=sizes["ood"],
         batch_size=config.training.batch_size,
         device=device,
+        run_seed=config.seed,
     )
+    sample_metrics_path = run_directory / "evaluation_samples.jsonl"
+    for record in [*test_records, *ood_records]:
+        _append_jsonl(sample_metrics_path, record)
     latency_batch = task.generate("test", [0], device=device)
+    latency = measure_latency_ms(model, latency_batch)
     summary: dict[str, Any] = {
-        "steps": state["step"],
+        "steps": completed_steps,
+        "selected_checkpoint": "best.pt",
+        "selected_checkpoint_step": int(selected_state["step"]),
         "best_validation_metric": state["best_metric"],
         "final_loss": final_loss,
         "test": test_metrics,
         "ood": ood_metrics,
-        "wall_clock_seconds": elapsed,
-        "latency_ms": measure_latency_ms(model, latency_batch),
+        "wall_clock_seconds": time.perf_counter() - started,
+        "training_wall_clock_seconds": training_wall_clock_seconds,
+        "latency_ms": latency,
         "training_examples": training_examples,
         "training_tokens": training_tokens,
         "validation_evaluations": validation_evaluations,
+        "initial_loss_mean": initial_loss_mean,
+        "final_loss_mean": final_loss_mean,
+        "loss_decreased": loss_decreased,
+        "peak_memory_bytes": peak_memory_bytes,
+        "peak_memory_method": peak_memory_method,
     }
     if isinstance(task, SmallGraphTask):
 
@@ -306,4 +436,8 @@ def train_baseline(
             "test": task.rollout(policy, "test", list(range(sizes["test"])), device=device),
             "ood": task.rollout(policy, "ood", list(range(sizes["ood"])), device=device),
         }
+    final_memory, peak_memory_method = _device_memory_bytes(device)
+    summary["peak_memory_bytes"] = max(peak_memory_bytes, final_memory)
+    summary["peak_memory_method"] = peak_memory_method
+    summary["wall_clock_seconds"] = time.perf_counter() - started
     return summary

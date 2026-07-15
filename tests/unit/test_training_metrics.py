@@ -39,3 +39,12 @@ def test_numerical_guard_detects_nonfinite_gradient() -> None:
         parameter.grad = torch.full_like(parameter, float("nan"))
     with pytest.raises(FloatingPointError, match="gradient"):
         ensure_finite_training_state(loss=torch.tensor(1.0), model=model, metrics={"accuracy": 1.0})
+
+
+def test_numerical_guard_detects_nonfinite_loss() -> None:
+    with pytest.raises(FloatingPointError, match="loss"):
+        ensure_finite_training_state(
+            loss=torch.tensor(float("nan")),
+            model=torch.nn.Linear(2, 1),
+            metrics={"accuracy": 1.0},
+        )

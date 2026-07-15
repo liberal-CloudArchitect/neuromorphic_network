@@ -4,7 +4,10 @@ import json
 from pathlib import Path
 
 import pytest
+import torch
 
+from neuromorphic.tasks import create_task
+from neuromorphic.training.baselines import BaselineOutput, GRUBaseline
 from neuromorphic.training.config import RunConfig
 from neuromorphic.training.run import execute, main
 
@@ -24,11 +27,16 @@ def _config(tmp_path: Path) -> RunConfig:
 
 
 def test_failed_run_preserves_manifest(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    def fail_training(**_: object) -> dict[str, object]:
-        raise FloatingPointError("injected non-finite loss")
+    task = create_task("associative_recall.v1")
 
-    monkeypatch.setattr("neuromorphic.training.run.train_baseline", fail_training)
-    with pytest.raises(FloatingPointError, match="injected"):
+    class NonFiniteGRU(GRUBaseline):
+        def forward(self, inputs: torch.Tensor, valid_mask: torch.Tensor) -> BaselineOutput:
+            logits = self.output_head(self.input_projection(inputs))
+            return BaselineOutput(logits=logits * torch.tensor(float("nan")))
+
+    model = NonFiniteGRU(input_dim=task.input_dim, num_classes=task.num_classes, hidden_size=8)
+    monkeypatch.setattr("neuromorphic.training.run.build_baseline", lambda *_: model)
+    with pytest.raises(FloatingPointError, match="loss is not finite"):
         execute(_config(tmp_path))
     manifest = json.loads(
         (tmp_path / "injected-failure" / "manifest.json").read_text(encoding="utf-8")
@@ -36,7 +44,7 @@ def test_failed_run_preserves_manifest(monkeypatch: pytest.MonkeyPatch, tmp_path
     assert manifest["status"] == "failed"
     assert manifest["failure"] == {
         "type": "FloatingPointError",
-        "message": "injected non-finite loss",
+        "message": "loss is not finite",
     }
 
 

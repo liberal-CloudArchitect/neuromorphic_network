@@ -35,7 +35,7 @@
     "optimizer": {"type": "object"},
     "data": {"type": "object"},
     "budget": {"type": "object"},
-    "cost": {"type": "object", "required": ["trainable_parameters", "estimated_macs_per_sequence", "mac_profiler_coverage", "unsupported_parameters", "latency_ms", "wall_clock_seconds"]},
+    "cost": {"type": "object", "required": ["trainable_parameters", "estimated_macs_per_sequence", "mac_profiler_coverage", "unsupported_parameters", "mac_operators", "latency_ms", "wall_clock_seconds", "peak_memory_bytes", "peak_memory_method"]},
     "artifacts": {"type": "object"}
   }
 }

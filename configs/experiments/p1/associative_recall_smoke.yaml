@@ -25,3 +25,4 @@ training:
   tbptt_steps: 32
   checkpoint_interval: 25
   auxiliary_loss_weight: 0.1
+  require_loss_decrease: true

@@ -42,6 +42,21 @@ def associative_key_value_predictions(batch: TaskBatch) -> Tensor:
     return predictions
 
 
+def associative_majority_predictions(batch: TaskBatch) -> Tensor:
+    """Predict the most frequent stored value, breaking ties by the smaller ID."""
+    predictions = torch.zeros_like(batch.targets)
+    for batch_index in range(batch.batch_size):
+        counts = torch.zeros(32, dtype=torch.long, device=batch.inputs.device)
+        for step in range(batch.sequence_length):
+            event = batch.inputs[batch_index, step]
+            if bool(batch.valid_mask[batch_index, step].item()) and bool(event[0].item()):
+                value = int(event[36:68].argmax().item())
+                counts[value] += 1
+            if bool(batch.loss_mask[batch_index, step].item()):
+                predictions[batch_index, step] = counts.argmax()
+    return predictions
+
+
 def delayed_rule_predictions(batch: TaskBatch, *, update_on_switch: bool) -> Tensor:
     """Apply the initial rule only, or update rule state whenever a cue appears."""
     predictions = torch.zeros_like(batch.targets)
@@ -67,6 +82,32 @@ def delayed_rule_predictions(batch: TaskBatch, *, update_on_switch: bool) -> Ten
                 else:
                     answer = 1 - (first ^ second)
                 predictions[batch_index, step] = answer
+    return predictions
+
+
+def small_graph_legal_predictions(batch: TaskBatch, *, mode: str, seed: int = 7) -> Tensor:
+    """Choose a legal action uniformly or by neighbor node-ID proximity to goal."""
+    if mode not in {"random", "node_id"}:
+        raise ValueError("mode must be 'random' or 'node_id'")
+    actions = batch.auxiliary_targets["action_nodes"]
+    goals = batch.auxiliary_targets["goal_node"]
+    predictions = torch.zeros_like(batch.targets)
+    generator = torch.Generator(device="cpu").manual_seed(seed)
+    for batch_index in range(batch.batch_size):
+        for step in range(batch.sequence_length):
+            if not bool(batch.loss_mask[batch_index, step].item()):
+                continue
+            legal = torch.nonzero(actions[batch_index, step] >= 0, as_tuple=False).flatten()
+            if legal.numel() == 0:
+                raise ValueError("SmallGraph supervised position has no legal action")
+            if mode == "random":
+                offset = int(torch.randint(legal.numel(), (), generator=generator).item())
+                selected = int(legal[offset].item())
+            else:
+                goal = goals[batch_index, step]
+                distances = (actions[batch_index, step, legal] - goal).abs()
+                selected = int(legal[distances.argmin()].item())
+            predictions[batch_index, step] = selected
     return predictions
 
 

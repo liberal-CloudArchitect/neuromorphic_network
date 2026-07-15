@@ -37,6 +37,18 @@ class MacProfile:
     total_parameters: int
     coverage: float
     unsupported_parameters: tuple[str, ...]
+    operators: tuple[MacOperatorRecord, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class MacOperatorRecord:
+    """One auditable analytic MAC contribution."""
+
+    name: str
+    operator: str
+    calls: int
+    input_shape: tuple[int, ...]
+    estimated_macs: int
 
 
 class GRUBaseline(nn.Module):
@@ -70,12 +82,19 @@ class GRUBaseline(nn.Module):
         )
 
     def forward(self, inputs: Tensor, valid_mask: Tensor) -> BaselineOutput:
+        output, _ = self.forward_chunk(inputs, valid_mask)
+        return output
+
+    def forward_chunk(
+        self, inputs: Tensor, valid_mask: Tensor, state: Tensor | None = None
+    ) -> tuple[BaselineOutput, Tensor]:
+        """Run one recurrent chunk and return its detachable hidden state."""
         if inputs.ndim != 3 or valid_mask.shape != inputs.shape[:2]:
             raise ValueError("invalid baseline input or mask shape")
-        encoded, _ = self.encoder(self.input_projection(inputs))
+        encoded, hidden_state = self.encoder(self.input_projection(inputs), state)
         logits = self.output_head(encoded)
-        next_state = None if self.next_state_head is None else self.next_state_head(encoded)
-        return BaselineOutput(logits=logits, next_state_logits=next_state)
+        next_state_logits = None if self.next_state_head is None else self.next_state_head(encoded)
+        return BaselineOutput(logits=logits, next_state_logits=next_state_logits), hidden_state
 
 
 class TransformerBaseline(nn.Module):
@@ -109,7 +128,7 @@ class TransformerBaseline(nn.Module):
             dropout=dropout,
             activation="gelu",
             batch_first=True,
-            norm_first=True,
+            norm_first=False,
         )
         self.encoder = nn.TransformerEncoder(layer, num_layers=layers)
         self.output_head = nn.Linear(hidden_size, num_classes)
@@ -277,10 +296,97 @@ def profile_macs(model: nn.Module, sequence_length: int) -> MacProfile:
     unsupported = tuple(
         name for name, parameter in trainable.items() if id(parameter) not in supported_ids
     )
+    operators: list[MacOperatorRecord] = []
+    if isinstance(model, GRUBaseline):
+        operators.extend(
+            [
+                MacOperatorRecord(
+                    name="input_projection",
+                    operator="Linear",
+                    calls=1,
+                    input_shape=(1, sequence_length, model.input_dim),
+                    estimated_macs=sequence_length * model.input_dim * model.hidden_size,
+                ),
+                MacOperatorRecord(
+                    name="encoder",
+                    operator="GRU",
+                    calls=1,
+                    input_shape=(1, sequence_length, model.hidden_size),
+                    estimated_macs=sequence_length
+                    * model.layers
+                    * 3
+                    * (2 * model.hidden_size * model.hidden_size),
+                ),
+            ]
+        )
+        for name, head in (
+            ("output_head", model.output_head),
+            ("next_state_head", model.next_state_head),
+        ):
+            if isinstance(head, nn.Linear):
+                operators.append(
+                    MacOperatorRecord(
+                        name=name,
+                        operator="Linear",
+                        calls=1,
+                        input_shape=(1, sequence_length, head.in_features),
+                        estimated_macs=sequence_length * head.in_features * head.out_features,
+                    )
+                )
+    elif isinstance(model, TransformerBaseline):
+        operators.extend(
+            [
+                MacOperatorRecord(
+                    name="input_projection",
+                    operator="Linear",
+                    calls=1,
+                    input_shape=(1, sequence_length, model.input_dim),
+                    estimated_macs=sequence_length * model.input_dim * model.hidden_size,
+                ),
+                MacOperatorRecord(
+                    name="encoder.self_attention",
+                    operator="Attention",
+                    calls=model.layers,
+                    input_shape=(1, sequence_length, model.hidden_size),
+                    estimated_macs=sequence_length
+                    * model.layers
+                    * (
+                        4 * model.hidden_size * model.hidden_size
+                        + 2 * sequence_length * model.hidden_size
+                    ),
+                ),
+                MacOperatorRecord(
+                    name="encoder.feedforward",
+                    operator="Linear",
+                    calls=2 * model.layers,
+                    input_shape=(1, sequence_length, model.hidden_size),
+                    estimated_macs=sequence_length
+                    * model.layers
+                    * 2
+                    * model.hidden_size
+                    * model.feedforward_size,
+                ),
+            ]
+        )
+        for name, head in (
+            ("output_head", model.output_head),
+            ("next_state_head", model.next_state_head),
+        ):
+            if isinstance(head, nn.Linear):
+                operators.append(
+                    MacOperatorRecord(
+                        name=name,
+                        operator="Linear",
+                        calls=1,
+                        input_shape=(1, sequence_length, head.in_features),
+                        estimated_macs=sequence_length * head.in_features * head.out_features,
+                    )
+                )
     return MacProfile(
         estimated_macs=estimate_macs(model, sequence_length),
         supported_parameters=supported,
         total_parameters=total,
         coverage=supported / total if total else 1.0,
         unsupported_parameters=unsupported,
+        operators=tuple(operators),
     )

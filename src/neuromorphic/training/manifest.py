@@ -49,6 +49,7 @@ def build_manifest(
     estimated_macs: int,
     mac_coverage: float,
     unsupported_parameters: tuple[str, ...],
+    mac_operators: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """Build a complete JSON-compatible run manifest."""
     commit, dirty = current_git_state()
@@ -77,8 +78,11 @@ def build_manifest(
             "estimated_macs_per_sequence": estimated_macs,
             "mac_profiler_coverage": mac_coverage,
             "unsupported_parameters": list(unsupported_parameters),
+            "mac_operators": mac_operators,
             "latency_ms": None,
             "wall_clock_seconds": None,
+            "peak_memory_bytes": None,
+            "peak_memory_method": None,
         },
         "artifacts": {},
     }

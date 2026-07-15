@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from functools import lru_cache
 
 import torch
 from torch import Tensor
@@ -25,6 +26,7 @@ class _Sample:
     targets: Tensor
     loss_mask: Tensor
     switch_position: int | None
+    mean_delay: float
 
 
 class DelayedRuleSwitchTask:
@@ -53,6 +55,7 @@ class DelayedRuleSwitchTask:
             return first ^ second
         return 1 - (first ^ second)
 
+    @lru_cache(maxsize=32_768)  # noqa: B019 - bounded task instances live for one run
     def _make_sample(self, split: DatasetSplit, sample_index: int) -> _Sample:
         generator = make_generator(self.task_version, split, sample_index)
         initial_rule = self._randint(generator, 0, 4)
@@ -68,6 +71,7 @@ class DelayedRuleSwitchTask:
         labels: list[int] = []
         selected: list[bool] = []
         active_rule = initial_rule
+        delays: list[int] = []
         for trial in range(self.trial_count):
             if trial == 0 or trial == switch_position:
                 if trial == switch_position:
@@ -80,6 +84,7 @@ class DelayedRuleSwitchTask:
                 selected.append(False)
 
             delay = self._randint(generator, delay_low, delay_high)
+            delays.append(delay)
             for _ in range(delay):
                 blank = torch.zeros(self.input_dim, dtype=torch.float32)
                 blank[1] = 1.0
@@ -102,6 +107,7 @@ class DelayedRuleSwitchTask:
             targets=torch.tensor(labels, dtype=torch.long),
             loss_mask=torch.tensor(selected, dtype=torch.bool),
             switch_position=switch_position,
+            mean_delay=sum(delays) / len(delays),
         )
 
     def content_hash(self, split: DatasetSplit, sample_index: int) -> str:
@@ -133,6 +139,7 @@ class DelayedRuleSwitchTask:
         hashes: list[str] = []
         lengths: list[int] = []
         switches: list[int | None] = []
+        mean_delays: list[float] = []
         indexed_samples = zip(sample_indices, samples, strict=True)
         for batch_index, (sample_index, sample) in enumerate(indexed_samples):
             steps = sample.inputs.shape[0]
@@ -146,6 +153,7 @@ class DelayedRuleSwitchTask:
             hashes.append(self.content_hash(split, sample_index))
             lengths.append(steps)
             switches.append(sample.switch_position)
+            mean_delays.append(sample.mean_delay)
 
         return TaskBatch(
             inputs=inputs,
@@ -162,6 +170,7 @@ class DelayedRuleSwitchTask:
                 "content_hashes": tuple(hashes),
                 "sequence_lengths": tuple(lengths),
                 "switch_positions": tuple(switches),
+                "mean_delays": tuple(mean_delays),
                 "profile": self.profile,
             },
             auxiliary_targets={},

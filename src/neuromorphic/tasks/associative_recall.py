@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from functools import lru_cache
 
 import torch
 from torch import Tensor
@@ -24,6 +25,8 @@ class _Sample:
     inputs: Tensor
     targets: Tensor
     loss_mask: Tensor
+    pair_count: int
+    distractor_count: int
 
 
 class AssociativeRecallTask:
@@ -41,6 +44,7 @@ class AssociativeRecallTask:
     def _randint(generator: torch.Generator, low: int, high: int) -> int:
         return int(torch.randint(low, high, (), generator=generator).item())
 
+    @lru_cache(maxsize=32_768)  # noqa: B019 - bounded task instances live for one run
     def _make_sample(self, split: DatasetSplit, sample_index: int) -> _Sample:
         generator = make_generator(self.task_version, split, sample_index)
         if split == "ood":
@@ -82,7 +86,7 @@ class AssociativeRecallTask:
         inputs[-1, 4 + query_key] = 1.0
         targets[-1] = answer
         loss_mask[-1] = True
-        return _Sample(inputs, targets, loss_mask)
+        return _Sample(inputs, targets, loss_mask, pair_count, distractor_count)
 
     def content_hash(self, split: DatasetSplit, sample_index: int) -> str:
         sample = self._make_sample(split, sample_index)
@@ -112,6 +116,8 @@ class AssociativeRecallTask:
         episode_ids = torch.full((batch_size, max_steps), -1, dtype=torch.long)
         hashes: list[str] = []
         lengths: list[int] = []
+        pair_counts: list[int] = []
+        distractor_counts: list[int] = []
         indexed_samples = zip(sample_indices, samples, strict=True)
         for batch_index, (sample_index, sample) in enumerate(indexed_samples):
             steps = sample.inputs.shape[0]
@@ -123,6 +129,8 @@ class AssociativeRecallTask:
             episode_ids[batch_index, :steps] = episode_id
             hashes.append(self.content_hash(split, sample_index))
             lengths.append(steps)
+            pair_counts.append(sample.pair_count)
+            distractor_counts.append(sample.distractor_count)
 
         batch = TaskBatch(
             inputs=inputs,
@@ -138,6 +146,8 @@ class AssociativeRecallTask:
                 "sample_indices": tuple(sample_indices),
                 "content_hashes": tuple(hashes),
                 "sequence_lengths": tuple(lengths),
+                "pair_counts": tuple(pair_counts),
+                "distractor_counts": tuple(distractor_counts),
                 "profile": self.profile,
             },
             auxiliary_targets={},
