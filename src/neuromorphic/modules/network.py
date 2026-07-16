@@ -15,6 +15,7 @@ from neuromorphic.core.contracts import (
     ModuleState,
     Phase,
     TelemetryRecord,
+    trusted_internal_execution,
 )
 from neuromorphic.core.module_registry import ModuleRegistry
 from neuromorphic.core.network_state import NetworkState
@@ -258,8 +259,6 @@ class ModularBrainNetwork(nn.Module):
         return NetworkState.initial(self.registry, batch_size, device=device, dtype=dtype)
 
     def _reset_state(self, state: NetworkState, reset_mask: Tensor) -> NetworkState:
-        if not torch.any(reset_mask).item():
-            return state
         updated = state.reset_counts(reset_mask)
         for module_id in self.registry.ids:
             module_state = self.registry.get(module_id).reset_state(
@@ -339,9 +338,11 @@ class ModularBrainNetwork(nn.Module):
             selected_counts[f"selected.{module_id}"] = selected.sum()
             # Predictive adaptation is action-conditioned and therefore runs
             # only after the action selector below.
-            if module_id == PREDICTIVE_ADAPTER or not torch.any(selected).item():
+            if module_id == PREDICTIVE_ADAPTER:
                 continue
             indices = torch.nonzero(selected, as_tuple=False).flatten()
+            if indices.numel() == 0:
+                continue
             module = self.registry.get(module_id)
             base_state = state.get(module_id)
             output = module.forward(
@@ -385,8 +386,8 @@ class ModularBrainNetwork(nn.Module):
             decision.executed_mask[:, 0, OPTIONAL_EXPERT_IDS.index(PREDICTIVE_ADAPTER)] & valid_rows
         )
         prediction_mask = torch.zeros_like(control.valid_mask)
-        if torch.any(predictive_selected).item():
-            indices = torch.nonzero(predictive_selected, as_tuple=False).flatten()
+        indices = torch.nonzero(predictive_selected, as_tuple=False).flatten()
+        if indices.numel() > 0:
             predictor = cast(PredictiveAdapter, self.registry.get(PREDICTIVE_ADAPTER))
             base_state = state.get(PREDICTIVE_ADAPTER)
             predictor_packet = BrainPacket(
@@ -477,6 +478,24 @@ class ModularBrainNetwork(nn.Module):
         """Execute a padded task batch sequentially with episode-local state."""
 
         batch.validate()
+        with trusted_internal_execution():
+            return self._forward_batch_trusted(
+                batch,
+                state,
+                phase=phase,
+                telemetry_enabled=telemetry_enabled,
+                forced_experts=forced_experts,
+            )
+
+    def _forward_batch_trusted(
+        self,
+        batch: TaskBatch,
+        state: NetworkState | None,
+        *,
+        phase: Phase,
+        telemetry_enabled: bool,
+        forced_experts: tuple[str, ...] | None,
+    ) -> ModularBrainOutput:
         control = task_control_from_batch(batch)
         if state is None:
             state = self.initial_state(

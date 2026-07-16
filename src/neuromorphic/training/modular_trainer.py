@@ -185,8 +185,7 @@ def _record_gradient_coverage(model: ModularBrainNetwork, coverage: dict[str, bo
         if not isinstance(module, nn.Module):
             raise TypeError("registered module is not a torch.nn.Module")
         coverage[module_id] = coverage[module_id] or any(
-            parameter.grad is not None and torch.isfinite(parameter.grad).all().item()
-            for parameter in module.parameters()
+            parameter.grad is not None for parameter in module.parameters()
         )
 
 
@@ -216,16 +215,15 @@ def train_one_update(
         include_primary=include_primary,
     )
     loss.backward()  # type: ignore[no-untyped-call]
-    for name, parameter in model.named_parameters():
-        if not torch.isfinite(parameter).all():
-            raise FloatingPointError(f"non-finite parameter: {name}")
-        if parameter.grad is not None and not torch.isfinite(parameter.grad).all():
-            raise FloatingPointError(f"non-finite gradient: {name}")
+    trainable = [parameter for parameter in model.parameters() if parameter.requires_grad]
     torch.nn.utils.clip_grad_norm_(
-        [parameter for parameter in model.parameters() if parameter.requires_grad],
+        trainable,
         gradient_clip_norm,
+        error_if_nonfinite=True,
     )
     optimizer.step()
+    if not torch.isfinite(torch.nn.utils.parameters_to_vector(trainable)).all().item():
+        raise FloatingPointError("non-finite parameter after modular optimizer step")
     return output, loss, parts
 
 
@@ -476,21 +474,21 @@ def run_joint_branch(
         if initial_states is None:
             initial_states = _state_snapshot(output.state)
         final_states = _state_snapshot(output.state)
-        raw_masks.append(
-            torch.cat([trace.raw_top2_mask.detach().cpu() for trace in output.routing_trace], dim=1)
-        )
-        executed_masks.append(
-            torch.cat([trace.executed_mask.detach().cpu() for trace in output.routing_trace], dim=1)
-        )
-        valid_masks.append(batch.valid_mask.detach().cpu())
-        task_token_counts[task_id] += int(batch.valid_mask.sum().item())
+        raw_batch = torch.cat(
+            [trace.raw_top2_mask.detach() for trace in output.routing_trace], dim=1
+        ).cpu()
+        executed_batch = torch.cat(
+            [trace.executed_mask.detach() for trace in output.routing_trace], dim=1
+        ).cpu()
+        valid_batch = batch.valid_mask.detach().cpu()
+        raw_masks.append(raw_batch)
+        executed_masks.append(executed_batch)
+        valid_masks.append(valid_batch)
+        task_token_counts[task_id] += int(valid_batch.sum().item())
         for expert_index, module_id in enumerate(
             (EPISODIC_MEMORY, WORKING_MEMORY, PREDICTIVE_ADAPTER)
         ):
-            expert_active_counts[module_id] += sum(
-                int(trace.executed_mask[..., expert_index].sum().item())
-                for trace in output.routing_trace
-            )
+            expert_active_counts[module_id] += int(executed_batch[..., expert_index].sum().item())
         _append_jsonl(
             directory / "metrics.jsonl",
             {

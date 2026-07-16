@@ -13,6 +13,7 @@ from typing import Final
 import torch
 from torch import Tensor
 
+from neuromorphic.core.contracts import internal_execution_is_trusted
 from neuromorphic.tasks.base import TaskBatch
 
 ASSOCIATIVE_RECALL: Final = "associative_recall.v1"
@@ -84,9 +85,15 @@ class TaskControl:
             raise ValueError("control tensors must share a device")
         if self.action_nodes.device != device:
             raise ValueError("action_nodes and goal_context must share a device")
-        if torch.any(self.loss_mask & ~self.valid_mask).item():
+        if (
+            not internal_execution_is_trusted()
+            and torch.any(self.loss_mask & ~self.valid_mask).item()
+        ):
             raise ValueError("loss_mask cannot select padding")
-        if not torch.isfinite(self.goal_context).all().item():
+        if (
+            not internal_execution_is_trusted()
+            and not torch.isfinite(self.goal_context).all().item()
+        ):
             raise ValueError("goal_context must contain only finite values")
 
     @property
@@ -129,7 +136,10 @@ class TaskControl:
             raise TypeError("action must use torch.long")
         if action.device != self.goal_context.device:
             raise ValueError("action and goal_context must share a device")
-        if torch.any((action < 0) | (action >= ACTION_COPY_DIM)).item():
+        if (
+            not internal_execution_is_trusted()
+            and torch.any((action < 0) | (action >= ACTION_COPY_DIM)).item()
+        ):
             raise ValueError("action values must be in [0, 31]")
         copied = torch.nn.functional.one_hot(action, ACTION_COPY_DIM).to(self.goal_context.dtype)
         copied = copied * self.valid_mask.unsqueeze(-1)

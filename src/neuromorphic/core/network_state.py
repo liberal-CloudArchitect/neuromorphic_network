@@ -8,7 +8,11 @@ from dataclasses import dataclass
 import torch
 from torch import Tensor
 
-from neuromorphic.core.contracts import ModuleState, validate_module_state
+from neuromorphic.core.contracts import (
+    ModuleState,
+    internal_execution_is_trusted,
+    validate_module_state,
+)
 from neuromorphic.core.module_registry import ModuleRegistry
 from neuromorphic.core.registry import MODULE_IDS
 
@@ -25,7 +29,7 @@ class NetworkState:
             raise ValueError("valid_step_counts must have shape [B]")
         if self.valid_step_counts.dtype != torch.long:
             raise TypeError("valid_step_counts must use torch.long")
-        if torch.any(self.valid_step_counts < 0).item():
+        if not internal_execution_is_trusted() and torch.any(self.valid_step_counts < 0).item():
             raise ValueError("valid_step_counts must be non-negative")
         unknown = set(self.module_states).difference(MODULE_IDS)
         if unknown:
@@ -79,8 +83,6 @@ class NetworkState:
         """Detach selected batch rows without severing other rows' graphs."""
 
         self._validate_batch_mask(detach_mask, "detach_mask")
-        if not torch.any(detach_mask).item():
-            return self
         updated: dict[str, ModuleState] = {}
         for module_id, state in self.module_states.items():
             tensors: dict[str, Tensor] = {}

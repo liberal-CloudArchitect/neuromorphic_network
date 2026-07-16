@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import cast
@@ -115,63 +114,37 @@ class SparseRouter(nn.Module):
         capacities = torch.zeros(
             packet.representation.shape[1], device=scores.device, dtype=torch.long
         )
+        expert_count = len(OPTIONAL_EXPERT_IDS)
 
-        # Recast the capacity problem as choosing one excluded expert per token.
-        # Each expert needs at least N-capacity exclusions. Moving exclusions from
-        # surplus donors to deficient experts is deterministic and never drops a token.
+        # Stable device-native greedy reassignment. Source and target experts are
+        # visited in frozen registry order. Within a pair, score penalty is sorted
+        # stably, so equal penalties retain batch-index order.
         for step in range(packet.representation.shape[1]):
-            valid_rows = torch.nonzero(packet.valid_mask[:, step], as_tuple=False).flatten()
-            token_count = int(valid_rows.numel())
-            if token_count == 0:
-                continue
-            capacity = math.ceil(
-                self.capacity_factor * token_count * self.top_k / len(OPTIONAL_EXPERT_IDS)
-            )
+            token_count = packet.valid_mask[:, step].sum()
+            capacity = torch.ceil(
+                token_count.to(scores.dtype) * self.capacity_factor * self.top_k / expert_count
+            ).to(torch.long)
             capacities[step] = capacity
-            excluded = (~executed[valid_rows, step]).to(torch.long).argmax(dim=-1)
-            minimum_exclusions = max(0, token_count - capacity)
-            expert_indices = torch.arange(len(OPTIONAL_EXPERT_IDS), device=scores.device)
-            counts = excluded.unsqueeze(-1).eq(expert_indices).sum(dim=0)
-            for deficient in range(len(OPTIONAL_EXPERT_IDS)):
-                needed = minimum_exclusions - int(counts[deficient].item())
-                while needed > 0:
-                    donors = [
-                        donor
-                        for donor in range(len(OPTIONAL_EXPERT_IDS))
-                        if int(counts[donor].item()) > minimum_exclusions
-                    ]
-                    candidates: list[tuple[float, int, int]] = []
-                    for local_index, donor_tensor in enumerate(excluded):
-                        donor = int(donor_tensor.item())
-                        if donor not in donors:
-                            continue
-                        batch_index = int(valid_rows[local_index].item())
-                        penalty = float(
-                            (
-                                scores[batch_index, step, deficient]
-                                - scores[batch_index, step, donor]
-                            )
-                            .detach()
-                            .item()
-                        )
-                        candidates.append((penalty, batch_index, local_index))
-                    if not candidates:
-                        raise RuntimeError("capacity reassignment could not preserve exact top-k")
-                    _, _, chosen = min(candidates)
-                    donor = int(excluded[chosen].item())
-                    excluded[chosen] = deficient
-                    counts[donor] -= 1
-                    counts[deficient] += 1
-                    needed -= 1
-            step_executed = torch.ones(
-                token_count,
-                len(OPTIONAL_EXPERT_IDS),
-                device=scores.device,
-                dtype=torch.bool,
-            )
-            step_executed.scatter_(-1, excluded.unsqueeze(-1), False)
-            executed[valid_rows, step] = step_executed
-
+            step_executed = executed[:, step]
+            for source in range(expert_count):
+                for target in range(expert_count):
+                    if source == target:
+                        continue
+                    loads = step_executed.to(torch.long).sum(dim=0)
+                    moves = torch.minimum(
+                        (loads[source] - capacity).clamp_min(0),
+                        (capacity - loads[target]).clamp_min(0),
+                    )
+                    excluded = (~step_executed).to(torch.long).argmax(dim=-1)
+                    candidates = step_executed[:, source] & excluded.eq(target)
+                    penalty = scores[:, step, target] - scores[:, step, source]
+                    ranked = torch.argsort(penalty.masked_fill(~candidates, torch.inf), stable=True)
+                    ranks = torch.empty_like(ranked)
+                    ranks.scatter_(0, ranked, torch.arange(ranked.numel(), device=scores.device))
+                    chosen = candidates & ranks.lt(moves)
+                    step_executed[:, source] &= ~chosen
+                    step_executed[:, target] |= chosen
+            executed[:, step] = step_executed
         rerouted = raw ^ executed
         return RoutingDecision(scores, raw, executed, capacities, rerouted, 0)
 

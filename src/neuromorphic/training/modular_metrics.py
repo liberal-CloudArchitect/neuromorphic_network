@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from typing import Protocol
 
@@ -55,11 +56,15 @@ def modular_training_loss(
     if include_primary:
         losses["primary"] = _primary_loss(output.logits, batch)
     for name, value in output.auxiliary_losses.items():
-        if value.ndim != 0 or not value.is_floating_point() or not torch.isfinite(value):
-            raise ValueError(f"modular auxiliary loss must be a finite scalar: {name}")
+        if value.ndim != 0 or not value.is_floating_point():
+            raise ValueError(f"modular auxiliary loss must be a floating scalar: {name}")
         losses[name] = value
     prediction_mask = output.prediction_mask
-    if prediction_mask is not None and prediction_mask.any():
+    if (
+        prediction_mask is not None
+        and batch.metadata.get("task_id") == "small_graph.v1"
+        and prediction_mask.any()
+    ):
         if output.prediction_logits is None or output.prediction_targets is None:
             raise ValueError("prediction mask requires logits and dynamic targets")
         if prediction_mask.shape != batch.valid_mask.shape:
@@ -72,15 +77,23 @@ def modular_training_loss(
         raise ValueError("modular training step produced no losses")
     total: Tensor | None = None
     parts: dict[str, float] = {}
+    names: list[str] = []
+    detached_values: list[Tensor] = []
     for name, value in losses.items():
         weight = float(weights.get(name, 0.0))
         weighted = value * weight
         total = weighted if total is None else total + weighted
-        parts[f"loss/{name}"] = float(value.detach().cpu())
+        names.append(name)
+        detached_values.append(value.detach())
         parts[f"weight/{name}"] = weight
-    if total is None or not torch.isfinite(total):
+    if total is None:
         raise FloatingPointError("modular total loss is not finite")
-    parts["loss/total"] = float(total.detach().cpu())
+    reduced = torch.stack((*detached_values, total.detach())).to("cpu").tolist()
+    if not all(math.isfinite(float(value)) for value in reduced):
+        raise FloatingPointError("modular total loss is not finite")
+    for name, value in zip(names, reduced[:-1], strict=True):
+        parts[f"loss/{name}"] = float(value)
+    parts["loss/total"] = float(reduced[-1])
     return total, parts
 
 

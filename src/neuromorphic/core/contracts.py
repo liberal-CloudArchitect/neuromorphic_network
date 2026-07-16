@@ -7,7 +7,9 @@ biological tissue nor claim one-to-one equivalence with brain regions.
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Literal, Protocol, runtime_checkable
 
@@ -24,6 +26,24 @@ _INTEGER_DTYPES = frozenset((torch.uint8, torch.int8, torch.int16, torch.int32, 
 _MAX_METADATA_PROPERTIES = 32
 _MAX_METADATA_STRING_LENGTH = 256
 _MAX_METADATA_ABS_NUMBER = 1.0e12
+_TRUSTED_INTERNAL_EXECUTION: ContextVar[bool] = ContextVar(
+    "trusted_internal_execution", default=False
+)
+
+
+@contextmanager
+def trusted_internal_execution() -> Iterator[None]:
+    """Skip repeated tensor-value scans inside an already validated batch graph."""
+
+    token = _TRUSTED_INTERNAL_EXECUTION.set(True)
+    try:
+        yield
+    finally:
+        _TRUSTED_INTERNAL_EXECUTION.reset(token)
+
+
+def internal_execution_is_trusted() -> bool:
+    return _TRUSTED_INTERNAL_EXECUTION.get()
 
 
 def _require_nonempty(value: str, name: str) -> None:
@@ -78,7 +98,7 @@ def validate_brain_packet(packet: BrainPacket) -> None:
         raise ValueError("representation dimensions must be positive")
     if not representation.is_floating_point():
         raise TypeError("representation must use a floating-point dtype")
-    if not torch.isfinite(representation).all().item():
+    if not internal_execution_is_trusted() and not torch.isfinite(representation).all().item():
         raise ValueError("representation must contain only finite values")
 
     expected_time_shape = (batch_size, sequence_length)
@@ -95,7 +115,7 @@ def validate_brain_packet(packet: BrainPacket) -> None:
         raise TypeError("step_index must use an integer dtype")
     if packet.step_index.device != representation.device:
         raise ValueError("step_index and representation must share a device")
-    if torch.any(packet.step_index < 0).item():
+    if not internal_execution_is_trusted() and torch.any(packet.step_index < 0).item():
         raise ValueError("step_index values must be non-negative")
 
     _require_nonempty(packet.modality, "modality")
@@ -113,7 +133,7 @@ def validate_brain_packet(packet: BrainPacket) -> None:
             raise TypeError("goal_context must use a floating-point dtype")
         if goal_context.device != representation.device:
             raise ValueError("goal_context and representation must share a device")
-        if not torch.isfinite(goal_context).all().item():
+        if not internal_execution_is_trusted() and not torch.isfinite(goal_context).all().item():
             raise ValueError("goal_context must contain only finite values")
 
     _validate_metadata(packet.metadata)
@@ -219,8 +239,9 @@ class ModuleOutput:
 def validate_module_output(output: ModuleOutput) -> None:
     """Validate output alignment, scalar losses, and telemetry event types."""
 
-    validate_brain_packet(output.packet)
-    validate_module_state(output.state, device=output.packet.representation.device)
+    if not internal_execution_is_trusted():
+        validate_brain_packet(output.packet)
+        validate_module_state(output.state, device=output.packet.representation.device)
     if output.packet.source_module != output.state.module_id:
         raise ValueError("output packet source_module must match state module owner")
     batch_size, sequence_length, _ = output.packet.representation.shape
@@ -236,7 +257,7 @@ def validate_module_output(output: ModuleOutput) -> None:
             raise TypeError(f"{name} must have a positive floating-point class dimension")
         if logits.device != output.packet.representation.device:
             raise ValueError(f"{name} and packet representation must share a device")
-        if not torch.isfinite(logits).all().item():
+        if not internal_execution_is_trusted() and not torch.isfinite(logits).all().item():
             raise ValueError(f"{name} must contain only finite values")
 
     for name, loss in output.auxiliary_losses.items():
@@ -249,7 +270,7 @@ def validate_module_output(output: ModuleOutput) -> None:
             raise ValueError("auxiliary losses and packet representation must share a device")
         if not loss.is_floating_point():
             raise TypeError("auxiliary losses must use a floating-point dtype")
-        if not torch.isfinite(loss).item():
+        if not internal_execution_is_trusted() and not torch.isfinite(loss).item():
             raise ValueError("auxiliary losses must be finite")
 
     if any(not isinstance(event, TelemetryRecord) for event in output.telemetry_events):
@@ -295,6 +316,8 @@ __all__ = [
     "ModuleState",
     "Phase",
     "TelemetryRecord",
+    "internal_execution_is_trusted",
+    "trusted_internal_execution",
     "validate_brain_packet",
     "validate_module_context",
     "validate_module_output",
