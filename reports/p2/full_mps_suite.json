@@ -1,0 +1,48 @@
+{
+  "schema_version": "p2-evidence-summary-v1",
+  "run_id": "p2-suite-s7-20260716T112848Z",
+  "status": "LOCAL_SUITE_PASSED",
+  "git_commit": "9499a33645e0b446e2039b790387b240f5758bda",
+  "git_dirty": false,
+  "device": "mps",
+  "updates": {
+    "pretrain_total": 400,
+    "joint_telemetry_off": 600,
+    "joint_telemetry_on": 600
+  },
+  "telemetry_equivalence": {
+    "maximum_parameter_difference": 9.731156751513481e-07,
+    "maximum_metric_difference": 0.0,
+    "metric_tolerance": 0.0001,
+    "event_count": 3600,
+    "wall_clock_overhead_ratio": 0.011939089364370416
+  },
+  "routing": {
+    "valid_tokens": 479200,
+    "exact_top_k": true,
+    "capacity_drops": 0,
+    "raw_shares": [0.47010121035058433, 0.3485381886477462, 0.18136060100166945],
+    "executed_shares": [0.4124613939899833, 0.33776815525876464, 0.2497704507512521],
+    "reroute_rate": 0.23632929883138565,
+    "executed_entropy": 1.078377899489474,
+    "executed_coefficient_of_variation": 0.19947686312617405
+  },
+  "cost": {
+    "active_optional_macs": 22489618944,
+    "dense_optional_macs": 32631603200,
+    "parameter_coverage": 0.9931239554619843,
+    "latency_ms_p50": 661.8900419998681,
+    "latency_ms_p95": 696.1125000088941,
+    "wall_clock_seconds": 2257.1591470830026
+  },
+  "artifact_checksums": {
+    "checked": 15,
+    "mismatches": 0
+  },
+  "schema_validation": {
+    "manifest": "valid",
+    "telemetry_events_validated": 3600
+  },
+  "scientific_scope": "Engineering qualification only; no biological equivalence or comparative benefit claim.",
+  "gate_status": "PENDING_INDEPENDENT_VERIFIER_AND_REMOTE_CPU_CI"
+}
