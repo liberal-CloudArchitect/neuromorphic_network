@@ -1,5 +1,11 @@
 import torch
 
+from neuromorphic.evaluation.p3_records import (
+    linear_cka,
+    linear_probe_accuracy,
+    p3_sample_records,
+    rsa_spearman,
+)
 from neuromorphic.tasks import create_task
 from neuromorphic.training.p3_baselines import (
     SharedGRUBaseline,
@@ -44,3 +50,17 @@ def test_shared_parameter_matching_is_within_five_percent() -> None:
     for kind in ("gru", "transformer"):
         match = select_shared_parameter_match(kind, target)
         assert match.relative_error <= 0.05
+
+
+def test_bounded_representation_analysis_and_model_agnostic_records() -> None:
+    features = torch.tensor([[-2.0, 0.0], [-1.0, 0.0], [1.0, 0.0], [2.0, 0.0]], dtype=torch.float32)
+    labels = torch.tensor([0, 0, 1, 1])
+    assert linear_cka(features, features) == 1.0
+    assert rsa_spearman(features, features) == 1.0
+    assert linear_probe_accuracy(features, labels, features, labels) == 1.0
+    task = create_task("associative_recall.v1", profile="smoke")
+    batch = task.generate("test", [0])
+    output = SharedGRUBaseline(hidden_size=32)(batch)
+    records = p3_sample_records(output, batch, run_seed=17, model_id="gru", variant_id="full")
+    assert records[0]["sample_index"] == 0
+    assert records[0]["stratum"] == records[0]["bootstrap_stratum"]

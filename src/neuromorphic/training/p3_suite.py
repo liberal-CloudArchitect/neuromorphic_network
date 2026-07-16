@@ -16,7 +16,12 @@ import torch
 from torch import Tensor, nn
 
 from neuromorphic.core.registry import EPISODIC_MEMORY, WORKING_MEMORY
-from neuromorphic.evaluation.p3_records import p3_sample_records
+from neuromorphic.evaluation.p3_records import (
+    linear_cka,
+    linear_probe_accuracy,
+    p3_sample_records,
+    rsa_spearman,
+)
 from neuromorphic.evaluation.p3_statistics import normalized_aulc
 from neuromorphic.inference.bundle import create_network_mvp_bundle
 from neuromorphic.tasks import SmallGraphTask, TaskBatch, create_task
@@ -612,6 +617,86 @@ def _initial_registry(config: P3SuiteConfig, run_id: str) -> dict[str, object]:
     }
 
 
+def _qualification_diagnostics(
+    config: P3SuiteConfig, device: torch.device, directory: Path
+) -> dict[str, object]:
+    """Exercise telemetry equality and bounded analysis paths outside scientific reports."""
+
+    set_global_seed(7)
+    first = cast(Any, _build_modular(config, 7)).to(device)
+    second = cast(Any, _build_modular(config, 7)).to(device)
+    second.load_state_dict(first.state_dict())
+    task = _task(config, "delayed_rule_switch.v1")
+    batch = task.generate("train", [0, 1], device=device)
+    first.train()
+    second.train()
+    first_optimizer = torch.optim.AdamW(first.parameters(), lr=3e-4)
+    second_optimizer = torch.optim.AdamW(second.parameters(), lr=3e-4)
+    outputs = []
+    gradients: list[dict[str, Tensor]] = []
+    weights = {"primary": 1.0, **P2LossWeights().by_loss_name()}
+    for model, optimizer, telemetry in (
+        (first, first_optimizer, False),
+        (second, second_optimizer, True),
+    ):
+        optimizer.zero_grad(set_to_none=True)
+        output = model.forward_batch(batch, phase="train", telemetry_enabled=telemetry)
+        loss, _ = modular_training_loss(output, batch, weights=weights)
+        loss.backward()  # type: ignore[no-untyped-call]
+        gradients.append(
+            {
+                name: parameter.grad.detach().clone()
+                for name, parameter in model.named_parameters()
+                if parameter.grad is not None
+            }
+        )
+        optimizer.step()
+        outputs.append(output)
+    tolerance = 1e-5 if device.type == "mps" else 0.0
+    logits_difference = float((outputs[0].logits - outputs[1].logits).abs().max().cpu())
+    gradient_difference = max(
+        float((gradients[0][name] - gradients[1][name]).abs().max().cpu()) for name in gradients[0]
+    )
+    parameter_difference = max(
+        float((left - right).abs().max().cpu())
+        for left, right in zip(
+            first.state_dict().values(), second.state_dict().values(), strict=True
+        )
+        if left.is_floating_point()
+    )
+    if max(logits_difference, gradient_difference, parameter_difference) > tolerance:
+        raise ValueError("P3 telemetry qualification exceeded numerical tolerance")
+
+    generator = torch.Generator(device="cpu").manual_seed(7)
+    first_representation = torch.randn((32, 8), generator=generator)
+    second_representation = first_representation @ torch.randn((8, 8), generator=generator)
+    labels = torch.arange(32).remainder(2)
+    analysis = {
+        "linear_cka": linear_cka(first_representation, second_representation),
+        "rsa_spearman": rsa_spearman(first_representation, second_representation),
+        "linear_probe_accuracy": linear_probe_accuracy(
+            first_representation[:16],
+            labels[:16],
+            first_representation[16:],
+            labels[16:],
+        ),
+    }
+    result = {
+        "schema_version": "p3-qualification-diagnostics-v1",
+        "qualification_only": True,
+        "device": str(device),
+        "telemetry_equivalence": {
+            "logits_max_abs": logits_difference,
+            "gradient_max_abs": gradient_difference,
+            "parameter_max_abs": parameter_difference,
+            "tolerance": tolerance,
+        },
+        "bounded_analysis": analysis,
+    }
+    _write_json(directory / "qualification-diagnostics.json", result)
+    return result
+
+
 def execute_p3_suite(config: P3SuiteConfig) -> dict[str, object]:
     """Run or resume every pre-registered cell without skipping failures."""
 
@@ -713,6 +798,9 @@ def execute_p3_suite(config: P3SuiteConfig) -> dict[str, object]:
             "qualification_failed" if config.qualification_only else "completed_with_failures"
         )
     if config.qualification_only and registry["status"] == "qualification_passed":
+        registry["qualification_diagnostics"] = _qualification_diagnostics(
+            config, device, directory
+        )
         fixture_path = directory / "network-mvp-fixture"
         if not fixture_path.exists():
             fixture_model = cast(Any, _build_modular(config, 7)).to(device)
