@@ -1,6 +1,6 @@
 ---
 title: GATE-2 独立验证报告
-status: FAILED
+status: PASSED
 gate: GATE-2
 verified_commit: 9499a33645e0b446e2039b790387b240f5758bda
 artifact_run: p2-suite-s7-20260716T112848Z
@@ -11,11 +11,11 @@ verified_at: 2026-07-16
 
 ## 裁决
 
-**GATE-2：FAILED（远程 CPU CI 证据待核验）。**
+**GATE-2：PASSED。**
 
-本地代码、完整 MPS suite、产物完整性、路由、成本、梯度覆盖、telemetry 等价性及科学边界均通过本次独立复核。唯一尚未闭合的硬条件是提交 `9499a33645e0b446e2039b790387b240f5758bda` 对应的远程 GitHub Actions CPU CI：当前环境没有 `gh`，未认证 GitHub API 对该仓库返回 `404`，因此不能独立读取并确认绿色结论。按照预先冻结的 Gate 规则，不得用本地结果代替远程 CPU CI，也不得推测或伪造远程结果。
+本地代码、完整 MPS suite、产物完整性、路由、成本、梯度覆盖、telemetry 等价性及科学边界均通过本次独立复核。提交 `9499a33645e0b446e2039b790387b240f5758bda` 对应的远程 GitHub Actions CPU CI 也已通过公开 GitHub API 独立核验为绿色，所有冻结硬条件均已闭合。
 
-在远程 CPU CI 被独立确认绿色前，P2-01～P2-16、AT-P2-01～05 和 ADR-004 不应全部关闭，版本也应保持 `0.2.0`，不得升级为 `0.3.0`。
+可以关闭 P2-01～P2-16 与 AT-P2-01～05、接受 ADR-004，并将项目升级为 `neuromorphic 0.3.0`。版本、台账和报告更新仍应作为独立 Lore Commit 提交并再次接受正常 CI，不得把本报告误解为 P3 科学收益结论。
 
 ## 验证对象
 
@@ -94,13 +94,14 @@ verified_at: 2026-07-16
 - 源码、环境、配置和依赖声明未发现 atlas、Three.js、Nilearn、WebSocket、viewer 或 3D 运行依赖；唯一命中是 telemetry schema 中明确声明“不含 atlas/web/viewer 依赖”的说明文字。
 - `docs/scientific-boundaries.md` 与 `docs/p2_implementation_spec.md` 明确六模块是人工计算抽象，不声称脑区一一对应、生物等价或临床意义。
 
-## 未闭合硬条件
+## 远程 CPU CI
 
 | 条件 | 状态 | 说明 |
 |---|---|---|
-| 当前 SHA 的远程 GitHub Actions CPU CI 绿色 | **UNVERIFIED / BLOCKING** | 本环境无 `gh`；未认证 GitHub API 对仓库返回 404，无法独立读取 run ID、URL、SHA 与 conclusion。 |
+| 当前 SHA 的远程 GitHub Actions CPU CI 绿色 | **PASSED** | CI run [`29494555468`](https://github.com/liberal-CloudArchitect/neuromorphic_network/actions/runs/29494555468)，head SHA `9499a33645e0b446e2039b790387b240f5758bda`，`completed/success`。 |
+| `quality` job | **PASSED** | Job [`87608327865`](https://github.com/liberal-CloudArchitect/neuromorphic_network/actions/runs/29494555468/job/87608327865)，Ubuntu latest，`completed/success`；所有 14 个 setup、quality、P1/P2 smoke 和 post 步骤均为 `success`。 |
 
-该条件是冻结方案中的 GATE-2 硬条件，因此本报告必须给出 FAILED，而不能把“本地全部通过”提升为阶段通过。
+公开 GitHub API 显示 workflow 于 `2026-07-16T11:28:33Z` 创建并开始，`2026-07-16T11:31:36Z` 更新为完成；quality job 于 `2026-07-16T11:28:36Z` 开始，`2026-07-16T11:31:35Z` 完成。关键步骤 `Test`、`CPU smoke test`、`P1 deterministic training smoke` 和 `P2 modular CPU micro smoke` 均为 `completed/success`。
 
 ## 限制与 P3 边界
 
@@ -108,6 +109,6 @@ verified_at: 2026-07-16
 - 多种子收益、公平参数/计算基线、正式消融、因果扰动、统计置信区间和科学否证属于 P3，不得由本次 seed-7 smoke 外推。
 - 3D/atlas/WebSocket/viewer 仍只是后续可选 telemetry 消费层，不得进入 forward、loss、路由、优化器或 Gate 科学结论。
 
-## 解除阻塞条件
+## 阶段结论
 
-独立记录提交 `9499a33645e0b446e2039b790387b240f5758bda` 对应 GitHub Actions workflow URL、run ID、head SHA、CPU job 结论和完成时间，并确认 conclusion 为 `success`。只有该证据闭合后，才能把本报告更新为 `PASSED`、关闭 P2 台账、接受 ADR-004 并升级至 `neuromorphic 0.3.0`。
+GATE-2 的本地 MPS 与远程 CPU 两条证据链均已闭合。本报告接受 P2 的工程实现与冻结边界；项目可更新完成台账、接受 ADR-004 并升级至 `neuromorphic 0.3.0`，随后进入 P3 多种子收益、基线对照、消融与统计验证。

@@ -102,3 +102,11 @@ last_updated: 2026-07-15
 - 每个模块均冻结 `Evidence → Abstraction → Hypothesis → 否证条件 → 对照实验` 链路。
 - 证据只支持工程假说的研究动机；任何实现收益仍须由冻结任务、公平基线和多 seed 统计验证。
 - P0 接受日期为 2026-07-15；评审人和 commit hash 由 `reports/gates/GATE-0.md` 在独立 Gate 评审时记录。
+
+## P2 工程资格证据索引
+
+- `QUAL-P2-MPS-001`：完整 MPS suite `p2-suite-s7-20260716T112848Z`，clean commit `9499a33645e0b446e2039b790387b240f5758bda`；四阶段 400 updates、telemetry off/on 各 600 updates，详见 `reports/p2/full_mps_suite.md`。
+- `QUAL-P2-CI-001`：GitHub Actions [run 29494555468](https://github.com/liberal-CloudArchitect/neuromorphic_network/actions/runs/29494555468)，相同 commit 的 CPU `quality` job 全部步骤于 2026-07-16 完成且 conclusion 为 `success`。
+- `QUAL-P2-GATE-001`：独立 `reports/gates/GATE-2.md` 裁决为 PASSED，接受 ADR-004 并允许升级 `neuromorphic 0.3.0`。
+
+上述条目是工程资格证据，不提升任何神经科学来源的证据等级，也不证明模块相对 P1 单体基线有科学收益；多种子比较、消融和否证留给 P3。

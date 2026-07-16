@@ -1,7 +1,7 @@
 {
   "schema_version": "p2-evidence-summary-v1",
   "run_id": "p2-suite-s7-20260716T112848Z",
-  "status": "LOCAL_SUITE_PASSED",
+  "status": "GATE_2_PASSED",
   "git_commit": "9499a33645e0b446e2039b790387b240f5758bda",
   "git_dirty": false,
   "device": "mps",
@@ -44,5 +44,13 @@
     "telemetry_events_validated": 3600
   },
   "scientific_scope": "Engineering qualification only; no biological equivalence or comparative benefit claim.",
-  "gate_status": "PENDING_INDEPENDENT_VERIFIER_AND_REMOTE_CPU_CI"
+  "remote_cpu_ci": {
+    "workflow_run_id": 29494555468,
+    "quality_job_id": 87608327865,
+    "head_sha": "9499a33645e0b446e2039b790387b240f5758bda",
+    "status": "completed",
+    "conclusion": "success",
+    "completed_at": "2026-07-16T11:31:36Z"
+  },
+  "gate_status": "PASSED"
 }

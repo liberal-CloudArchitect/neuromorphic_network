@@ -29,6 +29,6 @@
 
 路由改派率为 23.63%；这说明 `executed_mask` 与原始 score top-2 必须继续分开解释。当前只有三个 eligible experts，`eligible>=4 时 active<=60%` 条件仍为 N/A，不能据此声称端到端稀疏收益。
 
-## 尚待关闭
+## Gate 结论
 
-本摘要不是 GATE-2 裁决。仍需独立 verifier 报告及 commit 对应的远程 CPU GitHub Actions 绿色证据；在两者齐备前，不升级到 0.3.0，也不把 P2 台账标记为 DONE。
+独立 verifier 已将 GATE-2 裁决更新为 PASSED。远程 CPU CI [run 29494555468](https://github.com/liberal-CloudArchitect/neuromorphic_network/actions/runs/29494555468) 对被验证 commit `9499a33645e0b446e2039b790387b240f5758bda` 的 `quality` job 及全部 14 个步骤均为 success。P2 台账据此关闭，项目版本升级为 `0.3.0`。
