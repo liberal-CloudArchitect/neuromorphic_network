@@ -3,7 +3,7 @@ title: 统计分析协议
 status: ACCEPTED
 phase: P0
 gate: GATE-0
-last_updated: 2026-07-15
+last_updated: 2026-07-16
 ---
 
 # 统计分析与复现协议
@@ -41,6 +41,14 @@ strata 冻结为：Associative Recall 的 pair-count × interference-count bucke
 | 网络总体 | 五类预注册收益 | 至少两类达到门槛且对应 95% CI 支持预期方向 |
 
 `pp` 表示绝对百分点；“相对提高”定义为 `(model - baseline) / abs(baseline)`。基线为零时只报告绝对差，不计算相对值。
+
+### P3 protocol-v2 补充
+
+- 经 `CR-002`，样本效率主指标改为 analysis split 上的归一化学习曲线 AULC；总体门槛为相对提高 ≥15%，predictive retrained ablation 门槛为相对恶化 ≥10%。
+- analysis split seed 固定为 `5501`，正式大小为 512；不参与调参、早停或 checkpoint 选择。
+- P3 confirmatory 主基线为 shared GRU 与 shared Transformer。task score、OOD、AULC、forgetting 分别与两种基线比较，共八个主比较；一个收益类别必须同时通过两种基线的阈值、CI 和 Holm 校正。
+- P3 因果 family 固定为 episodic、working、predictive 三项 retrained contrasts。
+- paired bootstrap 必须先按 model/variant、seed、task、distribution、sample index 和 stratum 严格对齐；不允许把两个模型的样本独立重采样。
 
 ## 多重比较
 

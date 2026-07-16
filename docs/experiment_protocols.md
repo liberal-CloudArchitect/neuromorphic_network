@@ -3,7 +3,7 @@ title: 实验协议
 status: ACCEPTED
 phase: P0
 gate: GATE-0
-last_updated: 2026-07-15
+last_updated: 2026-07-16
 ---
 
 # P1 任务与实验协议
@@ -63,6 +63,8 @@ last_updated: 2026-07-15
 ## 网络总体判据
 
 相对参数匹配主基线，以下五类收益中至少两类达到门槛，且 95% CI 支持预期方向：任务分数相对提高 ≥5%；OOD 归一化分数提高 ≥5%；达标样本数减少 ≥15%；三任务平均遗忘绝对降低 ≥5pp；可选专家活跃 MAC 减少 ≥20% 且任务分数不劣超过 2%。该判据属于后续完整模块模型，不是 P1 单体基线的通过标准。
+
+P3 使用 `p3-protocol-v2`：经 `CR-002` 将“达标样本数减少 ≥15%”替换为 analysis split 上归一化 AULC 相对提高 ≥15%。shared GRU 与 shared Transformer 均为主基线；前四类收益必须相对两者同时达标。稀疏收益与 dense modular 对照。详细定义以 `docs/p3_implementation_spec.md` 为准。
 
 ## 排除、失败与偏差
 

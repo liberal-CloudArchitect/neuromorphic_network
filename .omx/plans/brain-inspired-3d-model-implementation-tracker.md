@@ -468,7 +468,7 @@
 | `EV-003` | GATE-0 | P0-10 | [GATE-0](../../reports/gates/GATE-0.md)，PASSED，reviewed commit `472c2c5` | `AVAILABLE` |
 | `EV-004` | GATE-1 | P1-11 | [GATE-1](../../reports/gates/GATE-1.md)，PASSED，reviewed commit `259caf1` | `AVAILABLE` |
 | `EV-P101` | P1 正式描述性基线 | P1-10 | [Associative Recall GRU](../../reports/p1/associative_recall_gru.md)，seeds 17/29/43 | `AVAILABLE` |
-| `EV-005` | GATE-2 | P2-16 | [GATE-2](../../reports/gates/GATE-2.md)（评审时记录 commit hash） | `PENDING` |
+| `EV-005` | GATE-2 | P2-16 | [GATE-2](../../reports/gates/GATE-2.md)，PASSED，reviewed commit `9499a33` | `AVAILABLE` |
 | `EV-006` | GATE-NN-MVP | P3-12 | [GATE-NN-MVP](../../reports/gates/GATE-NN-MVP.md)（评审时记录 commit hash） | `PENDING` |
 | `EV-V01` | GATE-VIZ | VIZ-11 | [GATE-VIZ](../../reports/gates/GATE-VIZ.md)（评审时记录 commit hash） | `DEFERRED` |
 
