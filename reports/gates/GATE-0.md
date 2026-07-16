@@ -38,6 +38,6 @@ reviewer: independent-verifier-agent
 3. `small-graph-v1` task version 命名不一致：统一为带连字符版本。
 4. Associative Recall 干扰 key 可能与存储/query key 碰撞：生成器改为从未使用 key 集合采样并加入回归测试。
 
-## 未关闭的治理证据
+## 后续治理闭环
 
-远程仓库已配置并推送；`GOV-005` 仅在 GitHub Actions 对相应 commit 首次显示绿色后改为 `DONE`。该事项不改变本报告的 P0 技术裁决，但会阻止 GATE-1 的最终关闭。
+本报告形成时尚未关闭的 `GOV-005` 已在后续完成。GitHub Actions [run 29408988494](https://github.com/liberal-CloudArchitect/neuromorphic_network/actions/runs/29408988494) 对 commit `259caf1f2bcf7b8f4f027eaba65e70edd0f7978b` 的 CPU 质量门禁结论为 `success`；对应证据纳入 `GATE-1` 独立评审。本段是后续状态注记，不改变 GATE-0 对 commit `472c2c5` 的历史裁决范围。

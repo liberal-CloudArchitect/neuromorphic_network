@@ -1,10 +1,10 @@
 # 类脑神经网络设计与实现：可行性研究、计算架构与可视化附属方案
 
-> 版本：0.3.0（网络优先实施基线）
+> 版本：0.4.0（GATE-1 后网络优先实施基线）
 >
 > 文献检索截止：2026-07-15
 >
-> 项目现状：仓库与 `brain` 环境已初始化，P0 研究规格准备中；本文同时作为研究摘要、架构决策和实施蓝图。
+> 项目现状：仓库、`brain` 环境、P0 科学/计算规格和 P1 任务基线体系已完成，`GATE-0` 与 `GATE-1` 均通过；本文同时作为研究摘要、架构决策和实施蓝图。
 
 ## 0. 结论先行
 
@@ -477,7 +477,7 @@ Three.js `BufferGeometry` 支持位置、法线、颜色和自定义 buffer attr
 - 建立 `Evidence / Abstraction / Hypothesis` registry；
 - 为每个 MVP 模块定义输入、输出、状态、时间尺度、损失、优化边界和消融；
 - 冻结 `BrainPacket`、`ModuleOutput`、module registry、状态生命周期和连接图；
-- 冻结三个任务：Associative Recall、Delayed Rule Switch、MiniGrid/小型图环境；
+- 冻结三个任务：Associative Recall、Delayed Rule Switch、内置 SmallGraph-v1；
 - 冻结参数匹配主基线、训练计算与推理成本匹配敏感性基线、数据划分、种子和统计协议；
 - telemetry 只定义与模型语义相关的事件，不在 P0 绑定 atlas 或 3D。
 
@@ -658,7 +658,7 @@ Three.js `BufferGeometry` 支持位置、法线、颜色和自定义 buffer attr
 
 - 网络主线：Conda `brain`、Python 3.12、PyTorch 2.12.1；配置用 YAML；所有模块将实现统一 state/packet/loss/telemetry 接口。
 - 实验：结构化 run manifest + JSONL/TensorBoard；强制记录 seed、数据版本、参数量、FLOPs、预算、基线和消融。
-- 任务：自建可控认知任务 + MiniGrid/小型图环境；后续再扩展多模态和连续学习 benchmark。
+- 任务：自建可控认知任务 + 内置 SmallGraph-v1；后续再扩展多模态和连续学习 benchmark。
 - 测试：pytest、Hypothesis、Ruff、mypy、CPU/MPS smoke；后续补充梯度/状态/序列属性、checkpoint 复现和多种子统计。
 - 可观测性：结构化 telemetry 与离线分析优先；FastAPI/WebSocket 仅用于外部消费者。
 - 可选展示：TypeScript + React + Three.js、Nibabel/Nilearn/TemplateFlow；与模型 Python 依赖隔离。
@@ -882,17 +882,16 @@ neuromorphic/
 
 ## 14. 下一步立即可执行的工作包
 
-进入实现时按以下顺序执行：
+P0 已完成 evidence registry、计算假说、公共契约和实验协议；P1 已完成三任务、描述性单体基线、训练恢复和统计产物体系。后续按以下顺序执行：
 
-1. 建立 evidence registry，为每个模块写清计算假说、状态、损失、消融和否证条件。
-2. 冻结 `BrainPacket`、`ModuleOutput`、module registry、状态生命周期和任务接口。
-3. 实现三个任务的参数匹配单体 RNN/Transformer 主基线，以及训练计算和推理成本匹配的敏感性基线，先得到可信行为基准。
-4. 实现情景记忆并在 Associative Recall 上证明快速绑定与干扰鲁棒性。
-5. 实现工作区，在延迟保持、规则切换和组合泛化上验证作用。
-6. 实现预测器、动作副本和动作选择器，在小型闭环环境验证状态预测与样本效率。
-7. 实现稀疏路由、负载均衡、多损失训练和路由塌缩监控。
-8. 运行 ≥3 seeds 的公平基线、消融、泛化和 3 任务顺序学习筛查，评审 `GATE-NN-MVP`。
-9. telemetry v1 稳定后，再启动 atlas、3D viewer 与脑区投影；它可以并行，但不能成为前 8 步的依赖。
-10. 只有 `GATE-NN-MVP` 通过后，才选择多模态、世界模型、SNN、局部学习或连接组先验支线。
+1. 按冻结契约实现 module registry、state reset、组合接口与统一多损失训练 step。
+2. 实现感觉编码器和情景记忆，并在 Associative Recall 上验证快速绑定与干扰鲁棒性。
+3. 实现工作记忆，在延迟保持、规则切换和组合泛化上验证作用。
+4. 实现预测适配、动作副本和动作选择，在 SmallGraph-v1 闭环验证下一状态预测与行为选择。
+5. 实现 step 级 top-2 稀疏路由、负载均衡和路由塌缩监控，必经路径不计入稀疏率。
+6. 跑通三任务模块化网络 smoke，经独立评审进入 `GATE-2`。
+7. 沿用 P1 冻结数据、预算和逐样本统计，运行 ≥3 seeds 公平比较、消融、泛化和三任务顺序学习筛查，评审 `GATE-NN-MVP`。
+8. telemetry v1 已冻结，但 atlas、3D viewer 与脑区投影继续作为非关键路径，不能成为前 7 步的依赖。
+9. 只有 `GATE-NN-MVP` 通过后，才选择多模态、世界模型、SNN、局部学习或连接组先验支线。
 
 这一路线把最关键失败暴露在前面：如果模块没有任务贡献、泛化收益或持续学习价值，项目会在网络 Gate 失败，而不会被漂亮的 3D 动画掩盖。展示层始终可以替换或删除，网络研究结果仍然成立。

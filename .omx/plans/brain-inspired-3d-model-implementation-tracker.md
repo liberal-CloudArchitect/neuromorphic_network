@@ -2,13 +2,13 @@
 
 > 文档类型：网络优先的可执行实施计划 / 项目追踪主账
 >
-> 版本：0.3.0
+> 版本：0.4.0
 >
 > 基线调整日期：2026-07-15
 >
 > 建议启动日（T0）：2026-07-20，可在正式启动时整体平移
 >
-> 当前阶段：`GATE-0_PREPARATION`
+> 当前阶段：`GATE-1_PASSED / P2_READY`
 >
 > 实施状态：`ACTIVE`
 >
@@ -85,7 +85,7 @@
 
 - Evidence/Abstraction/Hypothesis registry；
 - `BrainPacket`、`ModuleOutput`、模块状态和连接图；
-- Associative Recall、Delayed Rule Switch、MiniGrid/小型图环境；
+- Associative Recall、Delayed Rule Switch、内置 SmallGraph-v1；
 - 单体 RNN/Transformer、简单记忆、固定/随机路由基线；
 - 感觉编码、情景记忆、工作区、预测器、选择器、稀疏路由；
 - 分阶段训练、冻结/解冻、辅助损失和梯度冲突分析；
@@ -142,8 +142,8 @@
 
 | 阶段 | 计划日期 | 周 | 目标 | 状态 | Gate |
 |---|---|---:|---|---|---|
-| P0 科学与计算规格 | 2026-07-20—2026-07-31 | W1–W2 | 模块假说、接口、任务、基线协议 | `NOT_STARTED` | `GATE-0` |
-| P1 任务基线与训练骨架 | 2026-08-03—2026-08-14 | W3–W4 | 三任务、单体基线、复现体系 | `NOT_STARTED` | `GATE-1` |
+| P0 科学与计算规格 | 2026-07-15 | W1–W2 | 模块假说、接口、任务、基线协议 | `PASSED` | `GATE-0` |
+| P1 任务基线与训练骨架 | 2026-07-15 | W3–W4 | 三任务、单体基线、复现体系 | `PASSED` | `GATE-1` |
 | P2 模块化计算闭环 | 2026-08-17—2026-09-11 | W5–W8 | ≥5 模块、路由、状态、损失 | `NOT_STARTED` | `GATE-2` |
 | P3 因果、泛化与硬化 | 2026-09-14—2026-10-23 | W9–W14 | ≥3 seeds、消融、OOD、3 任务顺序学习、成本、复现 | `NOT_STARTED` | `GATE-NN-MVP` |
 | VIZ 可选展示 | telemetry v1 后分段开展 | 非关键路径 | W9 起可做 Activity/Learning；P3-05 后补 Model Causal Effect | `DEFERRED` | `GATE-VIZ` |
@@ -183,17 +183,17 @@
 | ID | 可验证需求 | 来源 | 实现任务 | 验收 | 状态 |
 |---|---|---|---|---|---|
 | `REQ-N01` | ≥5 模块参与闭环 | F§4, F§12 | P2-03—P2-11 | AT-P2-01 | `NOT_STARTED` |
-| `REQ-N02` | 版本化 packet/state/loss 接口 | F§4 | P0-04, P2-01 | AT-P0-02 | `NOT_STARTED` |
-| `REQ-N03` | 三个任务与公平单体基线 | F§7/P0–P1 | P0-06, P1-03—P1-08 | AT-P1-01 | `NOT_STARTED` |
+| `REQ-N02` | 版本化 packet/state/loss 接口 | F§4 | P0-04, P2-01 | AT-P0-02 | `DONE` |
+| `REQ-N03` | 三个任务与公平单体基线 | F§7/P0–P1 | P0-06, P1-03—P1-08 | AT-P1-01 | `DONE` |
 | `REQ-N04` | 情景记忆快速绑定 | F§3, F§7/P3 | P2-04, P3-03 | AT-NN-02 | `NOT_STARTED` |
 | `REQ-N05` | 工作区保持与规则控制 | F§3, F§7/P3 | P2-05, P3-04 | AT-NN-03 | `NOT_STARTED` |
 | `REQ-N06` | 预测器改善 probe 或样本效率 | F§3, F§7/P3 | P2-06, P3-05 | AT-NN-04 | `NOT_STARTED` |
 | `REQ-N07` | 路由稀疏且不塌缩 | F§3, F§7/P2 | P2-08, P3-06 | AT-P2-04 | `NOT_STARTED` |
 | `REQ-N08` | 模块化至少两类定量收益达到预注册阈值 | F§7/P3 | P0-08, P3-02—P3-08 | AT-NN-05 | `NOT_STARTED` |
 | `REQ-N09` | OOD 泛化、干扰鲁棒性和 3 任务顺序学习筛查 | F§7/P3, F§8 | P3-07 | AT-NN-06 | `NOT_STARTED` |
-| `REQ-N10` | checkpoint 与 fresh 环境复现 | F§7/P1, F§12 | P1-02, P3-11 | AT-NN-07 | `NOT_STARTED` |
+| `REQ-N10` | checkpoint 与 fresh 环境复现 | F§7/P1, F§12 | P1-02, P3-11 | AT-NN-07 | `IN_PROGRESS` |
 | `REQ-N11` | telemetry 可关闭且不改变语义 | F§5, F§12 | P2-12, P3-09 | AT-P2-05 | `NOT_STARTED` |
-| `REQ-N12` | 失败、方差、成本和限制完整报告 | F§8, F§12 | P3-10—P3-12 | AT-NN-08 | `NOT_STARTED` |
+| `REQ-N12` | 失败、方差、成本和限制完整报告 | F§8, F§12 | P3-10—P3-12 | AT-NN-08 | `IN_PROGRESS` |
 
 ### 4.2 可选展示需求
 
@@ -214,42 +214,42 @@
 | ID | 任务 | Owner | 估算 | 依赖 | 计划 | 状态 | 证据 |
 |---|---|---|---:|---|---|---|---|
 | `GOV-001` | 完成网络优先可行性研究与 ADR | ROLE-PM | 已完成 | 无 | 2026-07-15 | `DONE` | feasibility 文档 v0.2.1 |
-| `GOV-002` | 重建网络优先实施追踪台账 | ROLE-PM | 已完成 | GOV-001 | 2026-07-15 | `DONE` | 本文件 v0.2.1 |
+| `GOV-002` | 重建网络优先实施追踪台账 | ROLE-PM | 已完成 | GOV-001 | 2026-07-15 | `DONE` | 本文件 v0.4.0 |
 | `GOV-003` | 建立 README、许可证、贡献和科学边界说明 | ROLE-PLATFORM | 1.0 PD | 无 | 2026-07-15 | `DONE` | `README.md`, `LICENSE`, `CONTRIBUTING.md`, `docs/scientific-boundaries.md` |
 | `GOV-004` | 锁定 Python/PyTorch、依赖和硬件环境 | ROLE-PLATFORM | 1.0 PD | GOV-003 | 2026-07-15 | `DONE` | `environment.yml`, `pyproject.toml`, `locks/`, `reports/environment/` |
-| `GOV-005` | 建立 lint/typecheck/unit/integration/smoke CI | ROLE-PLATFORM | 2.0 PD | GOV-004 | W1–W2 | `IN_PROGRESS` | 本地 `make check`/MPS 已绿色；等待首次 GitHub Actions run |
+| `GOV-005` | 建立 lint/typecheck/unit/integration/smoke CI | ROLE-PLATFORM | 2.0 PD | GOV-004 | 2026-07-15 | `DONE` | Actions run `29408988494` / commit `259caf1`：`success`；见 `reports/ci/initial-green.md` |
 | `GOV-006` | 建立实验产物、run ID 和证据存档规则 | ROLE-EXP | 0.5 PD | GOV-003 | 2026-07-15 | `DONE` | `docs/experiment_artifacts.md`, `artifacts/README.md` |
 
 ### 5.2 P0：科学假说与计算规格
 
 | ID | 任务 | Owner | 估算 | 依赖 | 计划 | 状态 | 证据 |
 |---|---|---|---:|---|---|---|---|
-| `P0-01` | 建立 Evidence/Abstraction/Hypothesis registry | ROLE-NEURO | 2.0 PD | GOV-003 | W1 | `IN_PROGRESS` | DRAFT 模板已建；来源与评审待完成 |
-| `P0-02` | 为 6 个 MVP 模块定义功能、状态、时间尺度与否证条件 | ROLE-ML, ROLE-NEURO | 2.0 PD | P0-01 | W1 | `IN_PROGRESS` | 六模块 DRAFT 已建；证据绑定待完成 |
-| `P0-03` | 绘制模块连接图、信息流和动作副本时序 | ROLE-ML | 1.0 PD | P0-02 | W1 | `IN_PROGRESS` | DRAFT 计算图已建；接口/时序待评审 |
-| `P0-04` | 冻结 BrainPacket/ModuleOutput/state/loss 契约 | ROLE-ML | 2.0 PD | P0-03, GOV-004 | W1 | `NOT_STARTED` | `src/neuromorphic/core/contracts.py` + tests |
-| `P0-05` | 定义 module registry、生命周期和冻结/解冻规则 | ROLE-ML | 1.0 PD | P0-04 | W1–W2 | `NOT_STARTED` | `docs/module_lifecycle.md` |
-| `P0-06` | 冻结三个任务、数据划分、预算和主指标 | ROLE-EXP | 2.0 PD | P0-02 | W1 | `NOT_STARTED` | `docs/experiment_protocols.md` |
-| `P0-07` | 冻结单体/简单记忆/固定与随机路由基线；指定参数匹配主比较及训练计算、推理成本匹配敏感性比较 | ROLE-EXP, ROLE-ML | 2.0 PD | P0-06 | W2 | `NOT_STARTED` | `docs/baseline_spec.md` |
-| `P0-08` | 冻结多种子、CI、效应量及五类收益的定量 Gate 阈值 | ROLE-EXP, ROLE-QA | 2.0 PD | P0-06 | W2 | `NOT_STARTED` | `docs/statistical_protocol.md` |
-| `P0-09` | 定义 telemetry v1 模块语义；不含 atlas 字段依赖 | ROLE-PLATFORM, ROLE-ML | 1.0 PD | P0-04 | W2 | `NOT_STARTED` | `schemas/telemetry-v1.json` |
-| `P0-10` | GATE-0 独立评审 | ROLE-QA | 0.5 PD | P0-01—P0-09 | W2 末 | `NOT_STARTED` | `reports/gates/GATE-0.md` |
+| `P0-01` | 建立 Evidence/Abstraction/Hypothesis registry | ROLE-NEURO | 2.0 PD | GOV-003 | 2026-07-15 | `DONE` | `docs/evidence_registry.md`，六模块各 ≥2 项可定位来源 |
+| `P0-02` | 为 6 个 MVP 模块定义功能、状态、时间尺度与否证条件 | ROLE-ML, ROLE-NEURO | 2.0 PD | P0-01 | 2026-07-15 | `DONE` | `docs/module_hypotheses.md`（ACCEPTED） |
+| `P0-03` | 绘制模块连接图、信息流和动作副本时序 | ROLE-ML | 1.0 PD | P0-02 | 2026-07-15 | `DONE` | `docs/computational_graph.md`（ACCEPTED） |
+| `P0-04` | 冻结 BrainPacket/ModuleOutput/state/loss 契约 | ROLE-ML | 2.0 PD | P0-03, GOV-004 | 2026-07-15 | `DONE` | `src/neuromorphic/core/contracts.py` + valid/invalid 测试 |
+| `P0-05` | 定义 module registry、生命周期和冻结/解冻规则 | ROLE-ML | 1.0 PD | P0-04 | 2026-07-15 | `DONE` | `docs/module_lifecycle.md`、六个冻结 module IDs |
+| `P0-06` | 冻结三个任务、数据划分、预算和主指标 | ROLE-EXP | 2.0 PD | P0-02 | 2026-07-15 | `DONE` | `docs/experiment_protocols.md`（ACCEPTED） |
+| `P0-07` | 冻结单体/简单记忆/固定与随机路由基线；指定参数匹配主比较及训练计算、推理成本匹配敏感性比较 | ROLE-EXP, ROLE-ML | 2.0 PD | P0-06 | 2026-07-15 | `DONE` | `docs/baseline_spec.md`（ACCEPTED） |
+| `P0-08` | 冻结多种子、CI、效应量及五类收益的定量 Gate 阈值 | ROLE-EXP, ROLE-QA | 2.0 PD | P0-06 | 2026-07-15 | `DONE` | `docs/statistical_protocol.md`（ACCEPTED） |
+| `P0-09` | 定义 telemetry v1 模块语义；不含 atlas 字段依赖 | ROLE-PLATFORM, ROLE-ML | 1.0 PD | P0-04 | 2026-07-15 | `DONE` | `schemas/telemetry-v1.json` + JSON Schema/依赖扫描 |
+| `P0-10` | GATE-0 独立评审 | ROLE-QA | 0.5 PD | P0-01—P0-09 | 2026-07-15 | `DONE` | `reports/gates/GATE-0.md`：PASSED，reviewed commit `472c2c5` |
 
 ### 5.3 P1：任务基线与训练骨架
 
 | ID | 任务 | Owner | 估算 | 依赖 | 计划 | 状态 | 证据 |
 |---|---|---|---:|---|---|---|---|
-| `P1-01` | 实现 run manifest、seed、设备和数据版本记录 | ROLE-PLATFORM | 1.5 PD | GATE-0 | W3 | `NOT_STARTED` | run manifest schema/tests |
-| `P1-02` | 实现 checkpoint 保存/恢复与 RNG 状态复现 | ROLE-PLATFORM, ROLE-ML | 2.0 PD | P1-01 | W3 | `NOT_STARTED` | resume equivalence test |
-| `P1-03` | 实现 Associative Recall 与干扰变体 | ROLE-EXP | 1.5 PD | GATE-0 | W3 | `NOT_STARTED` | task tests + fixtures |
-| `P1-04` | 实现 Delayed Rule Switch 与延迟外推变体 | ROLE-EXP | 1.5 PD | GATE-0 | W3 | `NOT_STARTED` | task tests + fixtures |
-| `P1-05` | 实现 MiniGrid/小型图环境适配 | ROLE-EXP | 2.0 PD | GATE-0 | W3 | `NOT_STARTED` | deterministic environment smoke |
-| `P1-06` | 实现随机、简单记忆和固定规则基线 | ROLE-ML | 2.0 PD | P1-03—P1-05 | W3 | `NOT_STARTED` | baseline configs/results |
-| `P1-07` | 实现参数匹配主基线及训练计算、推理成本匹配的单体 RNN/Transformer 敏感性基线 | ROLE-ML | 3.5 PD | P1-03—P1-05 | W3–W4 | `NOT_STARTED` | baseline matching report |
-| `P1-08` | 实现训练/验证/测试、早停、指标和 bootstrap CI | ROLE-EXP | 2.0 PD | P1-01, P1-06 | W4 | `NOT_STARTED` | evaluation tests |
-| `P1-09` | 建立 NaN、梯度、mask、状态泄漏和序列边界检查 | ROLE-QA, ROLE-ML | 1.5 PD | P1-07, P1-08 | W4 | `NOT_STARTED` | failure-injection tests |
-| `P1-10` | 跑通三个任务 1-seed smoke 与至少一个正式基线 | ROLE-EXP | 2.0 PD+计算 | P1-06—P1-09 | W4 | `NOT_STARTED` | run manifests + report |
-| `P1-11` | GATE-1：基线与训练体系评审 | ROLE-QA | 0.5 PD | P1-01—P1-10 | W4 末 | `NOT_STARTED` | `reports/gates/GATE-1.md` |
+| `P1-01` | 实现 run manifest、seed、设备和数据版本记录 | ROLE-PLATFORM | 1.5 PD | GATE-0 | 2026-07-15 | `DONE` | `run-manifest-v1`、产物校验和与测试 |
+| `P1-02` | 实现 checkpoint 保存/恢复与 RNG 状态复现 | ROLE-PLATFORM, ROLE-ML | 2.0 PD | P1-01 | 2026-07-15 | `DONE` | CPU bitwise、MPS tolerance、config/sampler/RNG 等价测试 |
+| `P1-03` | 实现 Associative Recall 与干扰变体 | ROLE-EXP | 1.5 PD | GATE-0 | 2026-07-15 | `DONE` | deterministic fixture、ID/OOD、oracle 测试 |
+| `P1-04` | 实现 Delayed Rule Switch 与延迟外推变体 | ROLE-EXP | 1.5 PD | GATE-0 | 2026-07-15 | `DONE` | deterministic fixture、switch/delay/OOD 测试 |
+| `P1-05` | 实现内置 SmallGraph-v1 | ROLE-EXP | 2.0 PD | GATE-0 | 2026-07-15 | `DONE` | 集合最短路径目标、rollout、OOD/oracle 测试 |
+| `P1-06` | 实现随机、简单记忆和固定规则基线 | ROLE-ML | 2.0 PD | P1-03—P1-05 | 2026-07-15 | `DONE` | 三任务弱基线与 oracle 测试 |
+| `P1-07` | 实现参数匹配主基线及训练计算、推理成本匹配的单体 RNN/Transformer 敏感性基线 | ROLE-ML | 3.5 PD | P1-03—P1-05 | 2026-07-15 | `DONE` | GRU/Transformer、±5% 参数匹配、MAC/延迟记录 |
+| `P1-08` | 实现训练/验证/测试、早停、指标和 bootstrap CI | ROLE-EXP | 2.0 PD | P1-01, P1-06 | 2026-07-15 | `DONE` | CLI、早停、逐样本指标、10,000 次两级 bootstrap |
+| `P1-09` | 建立 NaN、梯度、mask、状态泄漏和序列边界检查 | ROLE-QA, ROLE-ML | 1.5 PD | P1-07, P1-08 | 2026-07-15 | `DONE` | 故障注入测试与失败 run manifest |
+| `P1-10` | 跑通三个任务 1-seed smoke 与至少一个正式基线 | ROLE-EXP | 2.0 PD+计算 | P1-06—P1-09 | 2026-07-15 | `DONE` | 三任务 seed-7 MPS smoke；Associative Recall GRU seeds 17/29/43 |
+| `P1-11` | GATE-1：基线与训练体系评审 | ROLE-QA | 0.5 PD | P1-01—P1-10 | 2026-07-15 | `DONE` | `reports/gates/GATE-1.md`：PASSED，reviewed commit `259caf1` |
 
 ### 5.4 P2：模块化类脑网络
 
@@ -264,7 +264,7 @@
 | `P2-07` | 实现动作选择器、候选冲突和策略输出 | ROLE-ML | 2.0 PD | P2-05, P2-06 | W6 | `NOT_STARTED` | policy/conflict tests |
 | `P2-08` | 实现任务特定 `eligible_experts` 上的 top-k 路由、负载偏差监控和容量限制；必经模块不计入稀疏率 | ROLE-ML | 3.0 PD | P2-01 | W6 | `NOT_STARTED` | routing health tests |
 | `P2-09` | 集成情景记忆 + 工作区任务闭环 | ROLE-ML | 2.0 PD | P2-04, P2-05 | W6 | `NOT_STARTED` | Associative/Rule integration |
-| `P2-10` | 集成预测器 + 选择器 + 环境闭环 | ROLE-ML | 2.5 PD | P2-06, P2-07, P1-05 | W7 | `NOT_STARTED` | MiniGrid integration |
+| `P2-10` | 集成预测器 + 选择器 + SmallGraph 环境闭环 | ROLE-ML | 2.5 PD | P2-06, P2-07, P1-05 | W7 | `NOT_STARTED` | SmallGraph integration |
 | `P2-11` | 集成稀疏路由和 ≥5 模块联合训练 | ROLE-ML | 3.0 PD | P2-08—P2-10 | W7 | `NOT_STARTED` | full-network tests |
 | `P2-12` | 显式产出 GPU 归约 telemetry，consumer 可为空 | ROLE-PLATFORM, ROLE-ML | 2.0 PD | P0-09, P2-11 | W7 | `NOT_STARTED` | telemetry on/off equivalence |
 | `P2-13` | 分阶段训练、冻结/解冻与辅助损失权重实验 | ROLE-EXP, ROLE-ML | 3.0 PD | P2-11 | W7–W8 | `NOT_STARTED` | training strategy report |
@@ -332,21 +332,21 @@
 
 | Test ID | 通过标准 | 状态 |
 |---|---|---|
-| `AT-P0-01` | 6 个模块均有证据、假说、输入/输出/状态/损失/消融/否证条件 | `NOT_RUN` |
-| `AT-P0-02` | packet/state/loss 契约通过 valid/invalid/shape 测试 | `NOT_RUN` |
-| `AT-P0-03` | 三任务协议包含划分、预算、seed、指标、基线和统计 | `NOT_RUN` |
-| `AT-P0-04` | telemetry schema 不依赖 atlas、Web 或 viewer | `NOT_RUN` |
-| `AT-P0-05` | 科学审查无一脑区一功能或生物等价性声称 | `NOT_RUN` |
+| `AT-P0-01` | 6 个模块均有证据、假说、输入/输出/状态/损失/消融/否证条件 | `PASS` |
+| `AT-P0-02` | packet/state/loss 契约通过 valid/invalid/shape 测试 | `PASS` |
+| `AT-P0-03` | 三任务协议包含划分、预算、seed、指标、基线和统计 | `PASS` |
+| `AT-P0-04` | telemetry schema 不依赖 atlas、Web 或 viewer | `PASS` |
+| `AT-P0-05` | 科学审查无一脑区一功能或生物等价性声称 | `PASS` |
 
 ### 8.2 GATE-1
 
 | Test ID | 通过标准 | 状态 |
 |---|---|---|
-| `AT-P1-01` | 三任务共享同一数据/评估接口；参数匹配主基线、训练计算匹配和推理 FLOPs/延迟匹配敏感性基线均可运行 | `NOT_RUN` |
-| `AT-P1-02` | 同 seed smoke 在容许误差内复现 | `NOT_RUN` |
-| `AT-P1-03` | checkpoint 恢复后指标与连续运行一致 | `NOT_RUN` |
-| `AT-P1-04` | 参数、FLOPs、训练步数和 wall-clock 均记录 | `NOT_RUN` |
-| `AT-P1-05` | NaN/mask/状态泄漏故障注入均被测试捕获 | `NOT_RUN` |
+| `AT-P1-01` | 三任务共享同一数据/评估接口；参数匹配主基线、训练计算匹配和推理 MAC/延迟匹配敏感性基线均可运行 | `PASS` |
+| `AT-P1-02` | 同 seed smoke 在容许误差内复现 | `PASS` |
+| `AT-P1-03` | checkpoint 恢复后指标与连续运行一致 | `PASS` |
+| `AT-P1-04` | 参数、MAC、训练步数、样本/token、延迟、峰值内存和 wall-clock 均记录 | `PASS` |
+| `AT-P1-05` | NaN/梯度/mask/状态泄漏/序列边界故障注入均被测试捕获 | `PASS` |
 
 ### 8.3 GATE-2
 
@@ -388,23 +388,23 @@
 | 字段 | 当前值 |
 |---|---|
 | 快照日期 | 2026-07-15 |
-| 总体状态 | `ACTIVE / GATE-0_PREPARATION` |
-| 当前 Gate | GATE-0 准备中；尚未进入评审 |
-| 已完成核心任务 | 5 / 55（规划 2，仓库治理 3） |
-| 核心实施任务完成率 | 3 / 53 = 5.7%；模型实现仍为 0 |
+| 总体状态 | `ACTIVE / GATE-1_PASSED / P2_READY` |
+| 当前 Gate | GATE-1 已通过；P2 入口条件满足 |
+| 已完成核心任务 | 27 / 55（规划 2，治理 6，P0 10，P1 11） |
+| 核心实施任务完成率 | 25 / 53 = 47.2%；类脑模块实现仍为 0 |
 | 可选 VIZ | 0 / 11，全部 `DEFERRED` |
 | 开放风险 | 9 |
 | 开放问题 | 0 |
-| 下一 Gate | GATE-0，计划 2026-07-31 |
-| 下一重点 | 证据来源评审、接口契约、任务与公平基线协议冻结 |
+| 下一 Gate | GATE-2 |
+| 下一重点 | P2 module registry、统一训练 step、感觉编码、情景/工作记忆与预测适配模块 |
 
-### 9.1 首批可执行任务
+### 9.1 下一批可执行任务
 
-1. `GOV-003 → GOV-004 → GOV-005`；
-2. `P0-01 → P0-02 → P0-03/P0-06`；
-3. `P0-03 → P0-04 → P0-05/P0-09`；
-4. `P0-06 → P0-07/P0-08`；
-5. 全部证据完成后执行 `P0-10`。
+1. `P2-01`：按冻结契约实现 module registry、组合和 state reset；
+2. `P2-02`：实现统一训练 step、多损失记录和模块冻结；
+3. `P2-03 → P2-06`：依次实现感觉编码、情景记忆、工作记忆与预测适配；
+4. 沿用 P1 冻结任务、预算、逐样本评估和成本口径，不以 P1 描述性分数作为类脑收益结论；
+5. viewer、atlas 和 3D 继续保持 `DEFERRED`。
 
 ---
 
@@ -441,8 +441,8 @@
 | ADR | 日期 | 决策 | 状态 | 检查点 |
 |---|---|---|---|---|
 | `ADR-001` | 2026-07-15 | 网络设计、训练和验证为唯一主线；3D 为可选 observer | `ACCEPTED` | GATE-NN-MVP |
-| `ADR-002` | 待 P0 | 模块契约与状态生命周期 | `PROPOSED` | GATE-0 |
-| `ADR-003` | 待 P0 | 三任务和公平基线协议 | `PROPOSED` | GATE-0 |
+| `ADR-002` | 2026-07-15 | 冻结模块契约、read-before-write、episode reset 与 TBPTT=32 状态生命周期 | `ACCEPTED` | GATE-0 |
+| `ADR-003` | 2026-07-15 | 冻结三任务、划分、预算、描述性单体基线和统计协议 | `ACCEPTED` | GATE-0 |
 | `ADR-004` | 待 P2 | 分阶段/联合训练与辅助损失策略 | `PROPOSED` | GATE-2 |
 | `ADR-005` | 2026-07-15 | `brain` 使用 Python 3.12/PyTorch 2.12.1；本机 MPS、CI CPU；当前不开放授权 | `ACCEPTED` | GOV-004 |
 | `ADR-V01` | 待 VIZ | atlas、ROI、许可证和展示映射 | `DEFERRED` | GATE-VIZ |
@@ -463,10 +463,11 @@
 | `EV-002` | 网络优先实施台账 | GOV-002 | [实施台账](brain-inspired-3d-model-implementation-tracker.md) | `AVAILABLE` |
 | `EV-G01` | 仓库治理与科学边界 | GOV-003 | [README](../../README.md)、[科学边界](../../docs/scientific-boundaries.md) | `AVAILABLE` |
 | `EV-G02` | osx-arm64 环境清单与锁 | GOV-004 | [环境记录](../../reports/environment/bootstrap-notes.md) | `AVAILABLE` |
-| `EV-G03` | 本地质量门禁 | GOV-005 | `make check`：9 passed/1 skipped；`make smoke-mps`：passed | `LOCAL_PASS` |
+| `EV-G03` | 本地与远程质量门禁 | GOV-005 | [CI 绿色记录](../../reports/ci/initial-green.md)；Actions run `29408988494` / job `87331282177` / commit `259caf1`：`success` | `AVAILABLE` |
 | `EV-G04` | 实验产物规则 | GOV-006 | [实验产物规范](../../docs/experiment_artifacts.md) | `AVAILABLE` |
-| `EV-003` | GATE-0 | P0-10 | [GATE-0](../../reports/gates/GATE-0.md)（评审时记录 commit hash） | `PENDING` |
-| `EV-004` | GATE-1 | P1-11 | [GATE-1](../../reports/gates/GATE-1.md)（评审时记录 commit hash） | `PENDING` |
+| `EV-003` | GATE-0 | P0-10 | [GATE-0](../../reports/gates/GATE-0.md)，PASSED，reviewed commit `472c2c5` | `AVAILABLE` |
+| `EV-004` | GATE-1 | P1-11 | [GATE-1](../../reports/gates/GATE-1.md)，PASSED，reviewed commit `259caf1` | `AVAILABLE` |
+| `EV-P101` | P1 正式描述性基线 | P1-10 | [Associative Recall GRU](../../reports/p1/associative_recall_gru.md)，seeds 17/29/43 | `AVAILABLE` |
 | `EV-005` | GATE-2 | P2-16 | [GATE-2](../../reports/gates/GATE-2.md)（评审时记录 commit hash） | `PENDING` |
 | `EV-006` | GATE-NN-MVP | P3-12 | [GATE-NN-MVP](../../reports/gates/GATE-NN-MVP.md)（评审时记录 commit hash） | `PENDING` |
 | `EV-V01` | GATE-VIZ | VIZ-11 | [GATE-VIZ](../../reports/gates/GATE-VIZ.md)（评审时记录 commit hash） | `DEFERRED` |
@@ -506,6 +507,25 @@
 未开始：类脑模块、任务、训练、实验和可视化实现。
 
 下一步：补齐 evidence registry 的论文级来源，冻结模块/状态/loss 契约与三任务协议。
+
+### 2026-W29：GATE-0 与 GATE-1 闭环
+
+**状态**：`ACTIVE / GATE-1_PASSED / P2_READY`
+
+已完成：
+
+- `GOV-005`：GitHub Actions run `29408988494` 在 commit `259caf1` 上绿色，远程治理闭环；
+- `P0-01—P0-10`：六模块证据与假说、公共契约、时序、三任务/基线/统计协议和 `telemetry-v1` 均冻结，独立 `GATE-0` 通过；
+- `P1-01—P1-11`：三任务、弱基线、GRU/Transformer、训练/恢复、故障注入、逐样本统计和产物体系完成；
+- 三任务 seed-7 MPS smoke 完成；Associative Recall GRU seeds `17/29/43` 正式运行完成；
+- 独立 verifier 从 `12,288` 条 test/OOD 记录重建 bootstrap，与跟踪报告完全一致；
+- 独立 `GATE-1` 通过，包进入 `0.2.0`。
+
+基线结论：test query accuracy `0.166178 [0.156901, 0.175618]`，OOD `0.069987 [0.059245, 0.081380]`；干扰下降 CI 跨 0。该结果只建立描述性比较锚点，不证明类脑收益。
+
+运行环境说明：质量门禁的 Ruff、format、mypy、pytest、CPU/MPS smoke 和 pre-commit 已分别通过，远程 CPU CI 绿色；当前受限沙箱无法再次解析位于沙箱外的 Conda env 来执行聚合 `make check` 包装器，未将该包装器伪报为本次重跑成功。
+
+下一步：进入 P2，先完成 module registry/state reset 和统一训练 step；3D/atlas/viewer 继续延期。
 
 ### 周报模板
 
@@ -577,17 +597,17 @@ VIZ：DEFERRED / 进展（不得替代网络指标）。
 
 ## 15. Gate 完整性检查
 
-- [ ] 所有核心任务状态已更新，`DONE` 均有证据；
-- [ ] 所有 `BLOCKED` 关联 Issue；
-- [ ] 数据、seed、预算、基线、环境和代码版本冻结；
-- [ ] 参数、FLOPs、显存、wall-clock 和样本效率完整；
+- [x] 所有核心任务状态已更新，`DONE` 均有证据；
+- [x] 所有 `BLOCKED` 关联 Issue（当前无 `BLOCKED`）；
+- [x] 数据、seed、预算、基线、环境和代码版本冻结；
+- [x] P1 参数、MAC、显存、延迟、wall-clock、样本和 token 完整；
 - [ ] 消融使用预注册阈值，失败结果未删除；
-- [ ] OOD、干扰和替代解释已检查；
+- [x] P1 OOD、干扰和替代解释已检查；
 - [ ] checkpoint 与 fresh 环境复现通过；
 - [ ] telemetry consumer 可关闭；
-- [ ] VIZ 进展未被计入网络 Gate；
-- [ ] 风险、ADR 和 CR 已更新；
-- [ ] 下一阶段入口条件满足。
+- [x] VIZ 进展未被计入网络 Gate；
+- [x] 风险、ADR 和 CR 已更新；
+- [x] P2 入口条件满足。
 
 ---
 
@@ -599,3 +619,4 @@ VIZ：DEFERRED / 进展（不得替代网络指标）。
 | 0.2.0 | 2026-07-15 | 全面调整为网络优先；重排 14 周关键路径；3D 移至独立 VIZ 台账与 Gate |
 | 0.2.1 | 2026-07-15 | 收紧公平基线、收益阈值、路由口径、持续学习筛查、遥测等价性和 VIZ 分段依赖 |
 | 0.3.0 | 2026-07-15 | 初始化 Git、`brain` 环境、Python 包、P0 DRAFT、质量门禁与 CI；进入 GATE-0 准备阶段 |
+| 0.4.0 | 2026-07-15 | 关闭 GOV-005；P0/GATE-0 与 P1/GATE-1 全部通过；登记正式基线、远程 CI 和 P2 入口状态 |
