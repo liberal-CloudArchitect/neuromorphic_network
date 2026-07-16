@@ -1,4 +1,4 @@
-.PHONY: env env-update lint format-check typecheck test smoke smoke-mps gate0 smoke-p1 smoke-p2-ci smoke-p2-mps check
+.PHONY: env env-update lint format-check typecheck test smoke smoke-mps gate0 smoke-p1 smoke-p2-ci smoke-p2-mps smoke-p3-ci qualify-p3-mps p3-full-start p3-full-status p3-full-logs p3-full-resume p3-full-stop p3-full-verify check
 
 CONDA_ENV := brain
 CONDA_RUN := conda run --no-capture-output -n $(CONDA_ENV)
@@ -42,5 +42,29 @@ smoke-p2-ci:
 
 smoke-p2-mps:
 	$(CONDA_RUN) python -m neuromorphic.training.run --config configs/experiments/p2/gate.yaml
+
+smoke-p3-ci:
+	$(CONDA_RUN) python -m neuromorphic.training.run --config configs/experiments/p3/ci.yaml
+
+qualify-p3-mps:
+	$(CONDA_RUN) python -m neuromorphic.training.run --config configs/experiments/p3/qualification.yaml
+
+p3-full-start:
+	./scripts/p3_full_run.sh start
+
+p3-full-status:
+	./scripts/p3_full_run.sh status
+
+p3-full-logs:
+	./scripts/p3_full_run.sh logs
+
+p3-full-resume:
+	./scripts/p3_full_run.sh resume
+
+p3-full-stop:
+	./scripts/p3_full_run.sh stop
+
+p3-full-verify:
+	./scripts/p3_full_run.sh verify
 
 check: lint format-check typecheck test smoke

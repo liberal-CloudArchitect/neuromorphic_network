@@ -56,3 +56,6 @@ jobs:
 
       - name: P2 modular CPU micro smoke
         run: make smoke-p2-ci
+
+      - name: P3 qualification CPU matrix
+        run: make smoke-p3-ci

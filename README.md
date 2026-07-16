@@ -11,7 +11,8 @@
 - P0 状态：科学假说、公共契约、三任务协议和 `telemetry-v1` 已冻结并通过 `GATE-0`。
 - P1 状态：三任务、弱基线、GRU/Transformer、训练/恢复/统计和产物体系已通过 `GATE-1`。
 - P2 状态：六个人工计算模块、真实 top-2 稀疏执行、checkpoint-v2、telemetry 等价及 CPU/MPS 可移植性已通过 `GATE-2`。
-- 模型状态：模块化工程闭环已实现；P2 结果不证明类脑收益或生物等价，正式多种子比较与消融属于 P3。
+- P3 状态：`p3-protocol-v2`、双主基线、因果/泛化矩阵和可恢复后台运行正在资格验证；正式三 seed 结果尚未产生。
+- 模型状态：模块化工程闭环已实现；P2/qualification 不证明类脑收益或生物等价，只有 `GATE-NN-MVP` 可授予网络 MVP 标签。
 
 ## 快速开始
 
@@ -22,6 +23,7 @@ make check
 make smoke-mps
 make smoke-p1
 make smoke-p2-ci
+make smoke-p3-ci
 ```
 
 若 `brain` 已存在，使用：
@@ -66,8 +68,23 @@ make smoke-mps     # 强制 MPS 验收
 make smoke-p1      # 三任务确定性训练 smoke
 make smoke-p2-ci   # P2 CPU 微型资格测试
 make smoke-p2-mps  # P2 完整 MPS Gate suite
+make smoke-p3-ci   # P3 全 cell 类型 CPU 小样本资格矩阵
+make qualify-p3-mps # P3 全 cell 类型 MPS 小样本资格矩阵
 make check         # 本地完整门禁
 ```
+
+P3 qualification 和远程 CI 均通过后，正式实验由后台脚本管理：
+
+```bash
+./scripts/p3_full_run.sh start
+./scripts/p3_full_run.sh status
+./scripts/p3_full_run.sh logs
+./scripts/p3_full_run.sh resume
+./scripts/p3_full_run.sh stop
+./scripts/p3_full_run.sh verify
+```
+
+`start` 会验证 clean SHA、`HEAD == origin/main`、qualification lock、MPS、电源和磁盘。后台运行只写入 ignored artifacts；关闭终端不会停止进程，机器重启后使用 `resume`。
 
 验收记录：[GATE-0](reports/gates/GATE-0.md)、[GATE-1](reports/gates/GATE-1.md)、[GATE-2](reports/gates/GATE-2.md)；P2 完整运行摘要见 [完整 MPS Suite](reports/p2/full_mps_suite.md)。
 
