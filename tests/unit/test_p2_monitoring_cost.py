@@ -36,6 +36,7 @@ def test_gradient_cosine_uses_named_finite_gradients() -> None:
     assert gradient_cosine_similarity(first, second) == pytest.approx(-1.0)
     with pytest.raises(ValueError, match="identical parameter names"):
         gradient_cosine_similarity(first, {})
+    assert gradient_cosine_similarity(first, {"weight": None}) is None
 
 
 def test_state_dynamics_reports_norm_and_change() -> None:

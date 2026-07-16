@@ -70,8 +70,10 @@ def gradient_cosine_similarity(
         right = current[name]
         if left is None and right is None:
             continue
-        if left is None or right is None or left.shape != right.shape:
-            raise ValueError(f"gradient availability or shape changed: {name}")
+        if left is None or right is None:
+            continue
+        if left.shape != right.shape:
+            raise ValueError(f"gradient shape changed: {name}")
         if not torch.isfinite(left).all() or not torch.isfinite(right).all():
             raise ValueError(f"gradient contains a non-finite value: {name}")
         left_cpu = left.detach().reshape(-1).to(device="cpu", dtype=torch.float64)
