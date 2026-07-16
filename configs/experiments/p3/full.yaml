@@ -1,0 +1,35 @@
+schema_version: p3-suite-v1
+protocol_version: p3-protocol-v2
+profile: full
+qualification_only: false
+device: mps
+output_root: artifacts/runs
+control_root: artifacts/p3/control
+seeds: [17, 29, 43]
+data:
+  train: 8192
+  validation: 2048
+  analysis: 512
+  test: 2048
+  ood: 2048
+budget:
+  batch_size: 64
+  shared_steps_per_task: 5000
+  per_task_steps: 5000
+  causal_steps: 5000
+  continual_steps_per_stage: 1500
+  validation_interval: 100
+  checkpoint_interval: 100
+  patience: 10
+  min_delta: 0.001
+  wall_clock_hours: 72
+  bootstrap_samples: 10000
+optimizer:
+  learning_rate: 0.0003
+  weight_decay: 0.01
+  gradient_clip_norm: 1.0
+task_order:
+  - associative_recall.v1
+  - delayed_rule_switch.v1
+  - small_graph.v1
+qualification_report: artifacts/p3/qualification-lock.json

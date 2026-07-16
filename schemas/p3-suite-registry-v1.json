@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neuromorphic.local/schemas/p3-suite-registry-v1.json",
+  "title": "P3 suite registry v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "run_id", "profile", "qualification_only", "protocol_version", "config_hash", "status", "cells"],
+  "properties": {
+    "schema_version": {"const": "p3-suite-registry-v1"},
+    "run_id": {"type": "string", "minLength": 1},
+    "profile": {"enum": ["qualification", "full"]},
+    "qualification_only": {"type": "boolean"},
+    "protocol_version": {"const": "p3-protocol-v2"},
+    "config_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "status": {"type": "string"},
+    "cells": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["cell_id", "status", "seed", "model_id", "variant_id"],
+        "properties": {
+          "cell_id": {"type": "string", "minLength": 1},
+          "status": {"enum": ["PENDING", "RUNNING", "COMPLETED", "FAILED", "INVALID", "RESOURCE_LIMIT"]},
+          "seed": {"type": "integer", "minimum": 0},
+          "model_id": {"enum": ["modular", "gru", "transformer"]},
+          "variant_id": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

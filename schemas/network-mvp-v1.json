@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neuromorphic.local/schemas/network-mvp-v1.json",
+  "title": "Network MVP bundle manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "qualification_only", "gate_status", "source_commit", "model_config", "weights", "limitations"],
+  "properties": {
+    "schema_version": {"const": "network-mvp-v1"},
+    "qualification_only": {"type": "boolean"},
+    "gate_status": {"type": "string"},
+    "source_commit": {"type": "string", "minLength": 1},
+    "model_config": {"type": "object"},
+    "weights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "limitations": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+  }
+}

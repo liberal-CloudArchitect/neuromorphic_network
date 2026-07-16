@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import cast
+from typing import Literal, cast
 
 import torch
 from torch import Tensor, nn
@@ -275,6 +275,8 @@ class ModularBrainNetwork(nn.Module):
         context: ModuleContext,
         *,
         forced_experts: tuple[str, ...] | None = None,
+        routing_mode: Literal["learned", "fixed", "random", "dense"] = "learned",
+        disabled_experts: tuple[str, ...] = (),
     ) -> ModularBrainOutput:
         """Execute a single time step; ``inputs`` and controls use T=1."""
 
@@ -306,7 +308,14 @@ class ModularBrainNetwork(nn.Module):
         )
         state = state.replace(sensory_output.state)
         router = cast(SparseRouter, self.registry.get(SPARSE_ROUTER))
-        decision = router.route(sensory_output.packet, forced_experts=forced_experts)
+        unknown_disabled = set(disabled_experts).difference(OPTIONAL_EXPERT_IDS)
+        if unknown_disabled:
+            raise ValueError(f"unknown disabled experts: {sorted(unknown_disabled)}")
+        decision = router.route(
+            sensory_output.packet,
+            forced_experts=forced_experts,
+            mode=routing_mode,
+        )
 
         expert_packets: dict[str, BrainPacket] = {}
         zero = adapted.sum() * 0.0
@@ -339,6 +348,8 @@ class ModularBrainNetwork(nn.Module):
             # Predictive adaptation is action-conditioned and therefore runs
             # only after the action selector below.
             if module_id == PREDICTIVE_ADAPTER:
+                continue
+            if module_id in disabled_experts:
                 continue
             indices = torch.nonzero(selected, as_tuple=False).flatten()
             if indices.numel() == 0:
@@ -387,7 +398,7 @@ class ModularBrainNetwork(nn.Module):
         )
         prediction_mask = torch.zeros_like(control.valid_mask)
         indices = torch.nonzero(predictive_selected, as_tuple=False).flatten()
-        if indices.numel() > 0:
+        if indices.numel() > 0 and PREDICTIVE_ADAPTER not in disabled_experts:
             predictor = cast(PredictiveAdapter, self.registry.get(PREDICTIVE_ADAPTER))
             base_state = state.get(PREDICTIVE_ADAPTER)
             predictor_packet = BrainPacket(
@@ -474,6 +485,8 @@ class ModularBrainNetwork(nn.Module):
         phase: Phase = "train",
         telemetry_enabled: bool = False,
         forced_experts: tuple[str, ...] | None = None,
+        routing_mode: Literal["learned", "fixed", "random", "dense"] = "learned",
+        disabled_experts: tuple[str, ...] = (),
     ) -> ModularBrainOutput:
         """Execute a padded task batch sequentially with episode-local state."""
 
@@ -485,6 +498,8 @@ class ModularBrainNetwork(nn.Module):
                 phase=phase,
                 telemetry_enabled=telemetry_enabled,
                 forced_experts=forced_experts,
+                routing_mode=routing_mode,
+                disabled_experts=disabled_experts,
             )
 
     def _forward_batch_trusted(
@@ -495,6 +510,8 @@ class ModularBrainNetwork(nn.Module):
         phase: Phase,
         telemetry_enabled: bool,
         forced_experts: tuple[str, ...] | None,
+        routing_mode: Literal["learned", "fixed", "random", "dense"],
+        disabled_experts: tuple[str, ...],
     ) -> ModularBrainOutput:
         control = task_control_from_batch(batch)
         if state is None:
@@ -534,6 +551,8 @@ class ModularBrainNetwork(nn.Module):
                 state,
                 context,
                 forced_experts=forced_experts,
+                routing_mode=routing_mode,
+                disabled_experts=disabled_experts,
             )
             state = output.state
             packets.append(output.packet)

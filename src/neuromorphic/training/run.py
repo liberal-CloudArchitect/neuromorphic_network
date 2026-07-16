@@ -217,6 +217,11 @@ def main(arguments: list[str] | None = None) -> int:
             from neuromorphic.training.p2_suite import execute_p2_suite
 
             result = execute_p2_suite(load_p2_suite_config(parsed.config))
+        elif isinstance(raw_config, dict) and raw_config.get("schema_version") == "p3-suite-v1":
+            from neuromorphic.training.p3_config import load_p3_suite_config
+            from neuromorphic.training.p3_suite import execute_p3_suite
+
+            result = execute_p3_suite(load_p3_suite_config(parsed.config))
         else:
             result = execute(load_run_config(parsed.config))
     except FloatingPointError as error:
@@ -229,6 +234,8 @@ def main(arguments: list[str] | None = None) -> int:
         print(json.dumps({"error": str(error), "exit_code": 2}), file=sys.stderr)
         return 2
     print(json.dumps(result, sort_keys=True))
+    if result.get("status") in {"qualification_failed", "resource_limit"}:
+        return 5
     return 0
 
 

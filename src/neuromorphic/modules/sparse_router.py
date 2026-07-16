@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import cast
+from typing import Literal, cast
 
 import torch
 from torch import Tensor, nn
@@ -92,9 +92,24 @@ class SparseRouter(nn.Module):
         self,
         packet: BrainPacket,
         forced_experts: tuple[str, ...] | None = None,
+        *,
+        mode: Literal["learned", "fixed", "random", "dense"] = "learned",
     ) -> RoutingDecision:
         scores = self._scores(packet)
         raw = torch.zeros_like(scores, dtype=torch.bool)
+        if mode not in {"learned", "fixed", "random", "dense"}:
+            raise ValueError(f"unsupported routing mode: {mode}")
+        if mode == "random":
+            batch_index = torch.arange(scores.shape[0], device=scores.device).view(-1, 1, 1)
+            step_index = packet.step_index.unsqueeze(-1)
+            expert_index = torch.arange(scores.shape[-1], device=scores.device).view(1, 1, -1)
+            scores = torch.sin(
+                (batch_index + 1).to(scores.dtype) * 17.0
+                + (step_index + 1).to(scores.dtype) * 31.0
+                + (expert_index + 1).to(scores.dtype) * 13.0
+            )
+        if mode == "fixed":
+            forced_experts = OPTIONAL_EXPERT_IDS[: self.top_k]
         if forced_experts is None:
             order = torch.argsort(scores, dim=-1, descending=True, stable=True)
             raw.scatter_(-1, order[..., : self.top_k], True)
@@ -111,6 +126,8 @@ class SparseRouter(nn.Module):
             raw[..., forced_indices] = True
         raw &= packet.valid_mask.unsqueeze(-1)
         executed = raw.clone()
+        if mode == "dense":
+            executed = packet.valid_mask.unsqueeze(-1).expand_as(raw).clone()
         capacities = torch.zeros(
             packet.representation.shape[1], device=scores.device, dtype=torch.long
         )
@@ -126,6 +143,8 @@ class SparseRouter(nn.Module):
             ).to(torch.long)
             capacities[step] = capacity
             step_executed = executed[:, step]
+            if mode == "dense":
+                continue
             for source in range(expert_count):
                 for target in range(expert_count):
                     if source == target:
