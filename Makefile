@@ -1,4 +1,4 @@
-.PHONY: env env-update lint format-check typecheck test smoke smoke-mps gate0 smoke-p1 check
+.PHONY: env env-update lint format-check typecheck test smoke smoke-mps gate0 smoke-p1 smoke-p2-ci smoke-p2-mps check
 
 CONDA_ENV := brain
 CONDA_RUN := conda run --no-capture-output -n $(CONDA_ENV)
@@ -36,5 +36,11 @@ smoke-p1:
 	$(CONDA_RUN) python -m neuromorphic.training.run --config configs/experiments/p1/associative_recall_smoke.yaml
 	$(CONDA_RUN) python -m neuromorphic.training.run --config configs/experiments/p1/delayed_rule_switch_smoke.yaml
 	$(CONDA_RUN) python -m neuromorphic.training.run --config configs/experiments/p1/small_graph_smoke.yaml
+
+smoke-p2-ci:
+	$(CONDA_RUN) python -m neuromorphic.training.run --config configs/experiments/p2/ci.yaml
+
+smoke-p2-mps:
+	$(CONDA_RUN) python -m neuromorphic.training.run --config configs/experiments/p2/gate.yaml
 
 check: lint format-check typecheck test smoke

@@ -53,3 +53,6 @@ jobs:
 
       - name: P1 deterministic training smoke
         run: make smoke-p1
+
+      - name: P2 modular CPU micro smoke
+        run: make smoke-p2-ci

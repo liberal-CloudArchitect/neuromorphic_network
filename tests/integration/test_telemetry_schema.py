@@ -8,7 +8,9 @@ import pytest
 from jsonschema import Draft202012Validator  # type: ignore[import-untyped]
 from jsonschema.exceptions import ValidationError  # type: ignore[import-untyped]
 
+from neuromorphic.core.registry import MODULE_IDS
 from neuromorphic.telemetry import SCHEMA_VERSION, TelemetryEdge, TelemetryEvent
+from neuromorphic.training.modular_telemetry import build_step_events
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -73,3 +75,22 @@ def test_event_validator_rejects_invalid_values() -> None:
         values.pop("schema_version")
         values["confidence"] = 1.5
         TelemetryEvent(**values)  # type: ignore[arg-type]
+
+
+def test_p2_aggregate_events_each_validate_and_remain_bounded() -> None:
+    events = build_step_events(
+        run_id="p2-test",
+        step=3,
+        phase="train",
+        split="train",
+        module_metrics={
+            module_id: {"compute_gate": True, "activity_raw": 0.25} for module_id in MODULE_IDS
+        },
+        reducer_version="p2-reducer-v1",
+        baseline_version="p2-modular-v1",
+    )
+    validator = Draft202012Validator(_schema())
+    assert len(events) == len(MODULE_IDS)
+    assert len({event.module_id for event in events}) == len(MODULE_IDS)
+    for event in events:
+        validator.validate(json.loads(json.dumps(event.to_dict())))

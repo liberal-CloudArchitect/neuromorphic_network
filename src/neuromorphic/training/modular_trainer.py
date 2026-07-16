@@ -12,12 +12,13 @@ from typing import cast
 import torch
 from torch import Tensor, nn
 
-from neuromorphic.core.contracts import ModuleState
+from neuromorphic.core.contracts import ModuleContext, ModuleState
 from neuromorphic.core.network_state import NetworkState
 from neuromorphic.core.registry import (
     ACTION_SELECTOR,
     EPISODIC_MEMORY,
     MODULE_IDS,
+    OPTIONAL_EXPERT_IDS,
     PREDICTIVE_ADAPTER,
     SENSORY_ENCODER,
     WORKING_MEMORY,
@@ -25,6 +26,8 @@ from neuromorphic.core.registry import (
 from neuromorphic.modules.network import ModularBrainNetwork, ModularBrainOutput
 from neuromorphic.tasks import create_task
 from neuromorphic.tasks.base import DatasetSplit, SequenceTask, TaskBatch
+from neuromorphic.tasks.control import task_control_from_batch
+from neuromorphic.tasks.small_graph import SmallGraphTask
 from neuromorphic.training.modular_checkpoint import save_modular_checkpoint
 from neuromorphic.training.modular_cost import profile_modular_execution
 from neuromorphic.training.modular_metrics import modular_task_metrics, modular_training_loss
@@ -76,6 +79,7 @@ class TrainingBranchResult:
     checkpoint: str
     telemetry_event_count: int
     cost_profile: Mapping[str, object]
+    gradient_coverage: Mapping[str, bool]
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -175,6 +179,17 @@ def _loss_decreased(history: Sequence[float]) -> bool:
     return sum(history[-window:]) / window < sum(history[:window]) / window
 
 
+def _record_gradient_coverage(model: ModularBrainNetwork, coverage: dict[str, bool]) -> None:
+    for module_id in MODULE_IDS:
+        module = model.registry.get(module_id)
+        if not isinstance(module, nn.Module):
+            raise TypeError("registered module is not a torch.nn.Module")
+        coverage[module_id] = coverage[module_id] or any(
+            parameter.grad is not None and torch.isfinite(parameter.grad).all().item()
+            for parameter in module.parameters()
+        )
+
+
 def train_one_update(
     *,
     model: ModularBrainNetwork,
@@ -239,6 +254,60 @@ def evaluate_modular(
     return {name: value / max(total, 1) for name, value in weighted.items()}
 
 
+def evaluate_small_graph_rollout(
+    model: ModularBrainNetwork,
+    task: SmallGraphTask,
+    *,
+    split: DatasetSplit,
+    size: int,
+    device: torch.device,
+) -> dict[str, float]:
+    """Run the modular policy against action-dependent live graph states."""
+
+    state: NetworkState | None = None
+    graph_signature: bytes | None = None
+
+    def policy(observation: Tensor) -> Tensor:
+        nonlocal state, graph_signature
+        observation = observation.to(device)
+        signature = (
+            observation[:256].detach().cpu().numpy().tobytes()
+            + observation[272:288].detach().cpu().numpy().tobytes()
+        )
+        reset = state is None or signature != graph_signature
+        graph_signature = signature
+        if state is None:
+            state = model.initial_state(1, device=device, dtype=observation.dtype)
+        batch = TaskBatch(
+            inputs=observation.reshape(1, 1, -1),
+            targets=torch.full((1, 1), -100, dtype=torch.long, device=device),
+            valid_mask=torch.ones((1, 1), dtype=torch.bool, device=device),
+            loss_mask=torch.ones((1, 1), dtype=torch.bool, device=device),
+            episode_ids=torch.zeros((1, 1), dtype=torch.long, device=device),
+            metadata={
+                "task_id": task.task_id,
+                "task_version": task.task_version,
+                "split": split,
+            },
+            auxiliary_targets={},
+        )
+        control = task_control_from_batch(batch)
+        context = ModuleContext(
+            task_id=task.task_id,
+            phase="evaluate",
+            reset_mask=torch.tensor([[reset]], dtype=torch.bool, device=device),
+            eligible_modules=OPTIONAL_EXPERT_IDS,
+            telemetry_enabled=False,
+        )
+        output = model.forward_step(batch.inputs, control, state, context)
+        state = output.state
+        return output.action_logits[0, 0]
+
+    with torch.no_grad():
+        metrics = task.rollout(policy, split, list(range(size)), device=device)
+    return {f"live_{name}": float(value) for name, value in metrics.items()}
+
+
 def run_pretraining(
     *,
     model: ModularBrainNetwork,
@@ -252,6 +321,7 @@ def run_pretraining(
     histories: dict[str, tuple[float, ...]] = {}
     evaluations: dict[str, dict[str, dict[str, float]]] = {}
     gradient_cosines: list[float | None] = []
+    gradient_coverage = {module_id: False for module_id in MODULE_IDS}
     last_output: ModularBrainOutput | None = None
     checkpoint = directory / "shared.pt"
     for stage in PRETRAIN_STAGES:
@@ -277,6 +347,7 @@ def run_pretraining(
                 telemetry_enabled=False,
             )
             last_output = output
+            _record_gradient_coverage(model, gradient_coverage)
             values.append(float(loss.detach().cpu()))
             _append_jsonl(
                 directory / "metrics.jsonl",
@@ -345,6 +416,7 @@ def run_pretraining(
         checkpoint=str(checkpoint),
         telemetry_event_count=0,
         cost_profile={},
+        gradient_coverage=gradient_coverage,
     )
 
 
@@ -379,6 +451,7 @@ def run_joint_branch(
     expert_active_counts = {
         module_id: 0 for module_id in (EPISODIC_MEMORY, WORKING_MEMORY, PREDICTIVE_ADAPTER)
     }
+    gradient_coverage = {module_id: False for module_id in MODULE_IDS}
     last_output: ModularBrainOutput | None = None
     total_steps = config.budget.joint_steps_per_task * len(P2_TASK_ORDER)
     for global_step in range(total_steps):
@@ -398,6 +471,7 @@ def run_joint_branch(
             telemetry_enabled=telemetry_enabled,
         )
         last_output = output
+        _record_gradient_coverage(model, gradient_coverage)
         histories[task_id].append(float(loss.detach().cpu()))
         if initial_states is None:
             initial_states = _state_snapshot(output.state)
@@ -494,7 +568,7 @@ def run_joint_branch(
             ("test", config.budget.test_size),
             ("ood", config.budget.ood_size),
         ):
-            evaluations[task_id][split] = evaluate_modular(
+            metrics = evaluate_modular(
                 model,
                 task,
                 split=split,  # type: ignore[arg-type]
@@ -502,6 +576,17 @@ def run_joint_branch(
                 batch_size=config.budget.batch_size,
                 device=device,
             )
+            if isinstance(task, SmallGraphTask):
+                metrics.update(
+                    evaluate_small_graph_rollout(
+                        model,
+                        task,
+                        split=split,  # type: ignore[arg-type]
+                        size=size,
+                        device=device,
+                    )
+                )
+            evaluations[task_id][split] = metrics
     raw = torch.cat([item.reshape(-1, item.shape[-1]) for item in raw_masks], dim=0)
     executed = torch.cat([item.reshape(-1, item.shape[-1]) for item in executed_masks], dim=0)
     valid = torch.cat([item.reshape(-1) for item in valid_masks], dim=0)
@@ -541,6 +626,7 @@ def run_joint_branch(
             task_token_counts=task_token_counts,
             expert_active_counts=expert_active_counts,
         ).to_dict(),
+        gradient_coverage=gradient_coverage,
     )
     final_model_state = {
         key: value.detach().cpu().clone() for key, value in model.state_dict().items()
@@ -586,6 +672,7 @@ __all__ = [
     "clone_model_state",
     "compare_branch_models",
     "evaluate_modular",
+    "evaluate_small_graph_rollout",
     "run_joint_branch",
     "run_pretraining",
     "train_one_update",

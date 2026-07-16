@@ -1,0 +1,42 @@
+schema_version: p2-suite-v1
+profile: gate
+seed: 7
+device: mps
+output_root: artifacts/runs
+model:
+  feature_dim: 128
+  episodic_slots: 16
+  working_slots: 4
+  working_slot_dim: 32
+  action_embedding_dim: 32
+  task_embedding_dim: 16
+  router_top_k: 2
+  router_capacity_factor: 1.25
+optimizer:
+  learning_rate: 0.0003
+  weight_decay: 0.01
+  gradient_clip_norm: 1.0
+budget:
+  pretrain_steps_per_stage: 100
+  joint_steps_per_task: 200
+  batch_size: 64
+  train_size: 64
+  validation_size: 32
+  test_size: 32
+  ood_size: 32
+  validation_interval_per_task: 25
+  checkpoint_interval_per_task: 50
+  tbptt_steps: 32
+losses:
+  primary: 1.0
+  episodic_retrieval: 0.1
+  episodic_separation: 0.01
+  working_consistency: 0.05
+  working_gate: 0.001
+  predictive_next_state: 0.1
+  router_load_balance: 0.01
+  router_communication: 0.001
+telemetry:
+  paired_training: true
+  reducer_version: p2-reducer-v1
+  baseline_version: p2-modular-v1

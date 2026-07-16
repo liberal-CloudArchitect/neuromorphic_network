@@ -1,4 +1,4 @@
-"""Command-line entry point for P1 baseline experiments."""
+"""Command-line entry point for P1 baselines and P2 modular suites."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
+import yaml
 from pydantic import ValidationError
 
 from neuromorphic.tasks import create_task
@@ -210,7 +211,14 @@ def main(arguments: list[str] | None = None) -> int:
     parser.add_argument("--config", required=True, type=Path)
     parsed = parser.parse_args(arguments)
     try:
-        result = execute(load_run_config(parsed.config))
+        raw_config = yaml.safe_load(parsed.config.read_text(encoding="utf-8"))
+        if isinstance(raw_config, dict) and raw_config.get("schema_version") == "p2-suite-v1":
+            from neuromorphic.training.p2_config import load_p2_suite_config
+            from neuromorphic.training.p2_suite import execute_p2_suite
+
+            result = execute_p2_suite(load_p2_suite_config(parsed.config))
+        else:
+            result = execute(load_run_config(parsed.config))
     except FloatingPointError as error:
         print(json.dumps({"error": str(error), "exit_code": 3}), file=sys.stderr)
         return 3
