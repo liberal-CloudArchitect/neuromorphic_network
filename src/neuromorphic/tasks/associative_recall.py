@@ -37,8 +37,16 @@ class AssociativeRecallTask:
     input_dim = 68
     num_classes = 32
 
-    def __init__(self, *, profile: str = "smoke") -> None:
+    def __init__(self, *, profile: str = "smoke", distribution: str = "v1") -> None:
+        if distribution not in {"v1", "capacity", "interference", "joint"}:
+            raise ValueError(f"unknown associative-recall distribution: {distribution}")
         self.profile = profile
+        self.distribution = distribution
+        self.task_version = (
+            "associative-recall-v1"
+            if distribution == "v1"
+            else f"associative-recall-p3-{distribution}-v1"
+        )
 
     @staticmethod
     def _randint(generator: torch.Generator, low: int, high: int) -> int:
@@ -48,8 +56,12 @@ class AssociativeRecallTask:
     def _make_sample(self, split: DatasetSplit, sample_index: int) -> _Sample:
         generator = make_generator(self.task_version, split, sample_index)
         if split == "ood":
-            pair_count = self._randint(generator, 9, 13)
-            distractor_count = self._randint(generator, 5, 9)
+            pair_range = (9, 13) if self.distribution in {"v1", "capacity", "joint"} else (4, 9)
+            distractor_range = (
+                (5, 9) if self.distribution in {"v1", "interference", "joint"} else (0, 5)
+            )
+            pair_count = self._randint(generator, *pair_range)
+            distractor_count = self._randint(generator, *distractor_range)
         else:
             pair_count = self._randint(generator, 4, 9)
             distractor_count = self._randint(generator, 0, 5)
@@ -149,6 +161,7 @@ class AssociativeRecallTask:
                 "pair_counts": tuple(pair_counts),
                 "distractor_counts": tuple(distractor_counts),
                 "profile": self.profile,
+                "distribution": self.distribution,
             },
             auxiliary_targets={},
         ).to(device)

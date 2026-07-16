@@ -18,7 +18,9 @@ _TASKS: dict[str, type[AssociativeRecallTask | DelayedRuleSwitchTask | SmallGrap
 }
 
 
-def create_task(task_id: str, *, profile: TaskProfile = "smoke") -> SequenceTask:
+def create_task(
+    task_id: str, *, profile: TaskProfile = "smoke", distribution: str = "v1"
+) -> SequenceTask:
     """Create a task; profiles select run budgets, never sample content."""
     if profile not in ("smoke", "qualification"):
         raise ValueError(f"unknown task profile: {profile}")
@@ -27,4 +29,4 @@ def create_task(task_id: str, *, profile: TaskProfile = "smoke") -> SequenceTask
     except KeyError as error:
         known = ", ".join(sorted(_TASKS))
         raise ValueError(f"unknown task_id {task_id!r}; expected one of: {known}") from error
-    return task_type(profile=profile)
+    return task_type(profile=profile, distribution=distribution)

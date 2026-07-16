@@ -26,6 +26,7 @@ class _Sample:
     targets: Tensor
     loss_mask: Tensor
     switch_position: int | None
+    switch_positions: tuple[int, ...]
     mean_delay: float
 
 
@@ -38,8 +39,16 @@ class DelayedRuleSwitchTask:
     num_classes = 2
     trial_count = 4
 
-    def __init__(self, *, profile: str = "smoke") -> None:
+    def __init__(self, *, profile: str = "smoke", distribution: str = "v1") -> None:
+        if distribution not in {"v1", "delay", "composition", "joint"}:
+            raise ValueError(f"unknown delayed-rule distribution: {distribution}")
         self.profile = profile
+        self.distribution = distribution
+        self.task_version = (
+            "delayed-rule-switch-v1"
+            if distribution == "v1"
+            else f"delayed-rule-switch-p3-{distribution}-v1"
+        )
 
     @staticmethod
     def _randint(generator: torch.Generator, low: int, high: int) -> int:
@@ -59,13 +68,16 @@ class DelayedRuleSwitchTask:
     def _make_sample(self, split: DatasetSplit, sample_index: int) -> _Sample:
         generator = make_generator(self.task_version, split, sample_index)
         initial_rule = self._randint(generator, 0, 4)
+        switch_positions: tuple[int, ...]
         if split == "ood":
-            switch_position: int | None = 3
-            delay_low, delay_high = 9, 17
+            delay_low, delay_high = (
+                (9, 17) if self.distribution in {"v1", "delay", "joint"} else (2, 9)
+            )
+            switch_positions = (1, 3) if self.distribution in {"composition", "joint"} else (3,)
         else:
-            switch_position = 2 if self._randint(generator, 0, 4) != 0 else None
+            switch_positions = (2,) if self._randint(generator, 0, 4) != 0 else ()
             delay_low, delay_high = 2, 9
-        next_rule = (initial_rule + self._randint(generator, 1, 4)) % 4
+        switch_position = switch_positions[-1] if switch_positions else None
 
         rows: list[Tensor] = []
         labels: list[int] = []
@@ -73,9 +85,9 @@ class DelayedRuleSwitchTask:
         active_rule = initial_rule
         delays: list[int] = []
         for trial in range(self.trial_count):
-            if trial == 0 or trial == switch_position:
-                if trial == switch_position:
-                    active_rule = next_rule
+            if trial == 0 or trial in switch_positions:
+                if trial in switch_positions:
+                    active_rule = (active_rule + self._randint(generator, 1, 4)) % 4
                 cue = torch.zeros(self.input_dim, dtype=torch.float32)
                 cue[0] = 1.0
                 cue[3 + active_rule] = 1.0
@@ -107,6 +119,7 @@ class DelayedRuleSwitchTask:
             targets=torch.tensor(labels, dtype=torch.long),
             loss_mask=torch.tensor(selected, dtype=torch.bool),
             switch_position=switch_position,
+            switch_positions=switch_positions,
             mean_delay=sum(delays) / len(delays),
         )
 
@@ -139,6 +152,7 @@ class DelayedRuleSwitchTask:
         hashes: list[str] = []
         lengths: list[int] = []
         switches: list[int | None] = []
+        all_switches: list[str] = []
         mean_delays: list[float] = []
         indexed_samples = zip(sample_indices, samples, strict=True)
         for batch_index, (sample_index, sample) in enumerate(indexed_samples):
@@ -153,6 +167,7 @@ class DelayedRuleSwitchTask:
             hashes.append(self.content_hash(split, sample_index))
             lengths.append(steps)
             switches.append(sample.switch_position)
+            all_switches.append(",".join(str(value) for value in sample.switch_positions))
             mean_delays.append(sample.mean_delay)
 
         return TaskBatch(
@@ -170,8 +185,10 @@ class DelayedRuleSwitchTask:
                 "content_hashes": tuple(hashes),
                 "sequence_lengths": tuple(lengths),
                 "switch_positions": tuple(switches),
+                "switch_positions_all": tuple(all_switches),
                 "mean_delays": tuple(mean_delays),
                 "profile": self.profile,
+                "distribution": self.distribution,
             },
             auxiliary_targets={},
         ).to(device)

@@ -10,7 +10,7 @@ from typing import Literal, Protocol, runtime_checkable
 import torch
 from torch import Tensor
 
-type DatasetSplit = Literal["train", "validation", "test", "ood"]
+type DatasetSplit = Literal["train", "validation", "analysis", "test", "ood"]
 type MetadataScalar = str | int | float | bool | None
 type MetadataValue = MetadataScalar | tuple[MetadataScalar, ...]
 
@@ -19,6 +19,7 @@ CPU_DEVICE = torch.device("cpu")
 SPLIT_SEEDS: Mapping[DatasetSplit, int] = {
     "train": 1_101,
     "validation": 2_201,
+    "analysis": 5_501,
     "test": 3_301,
     "ood": 4_401,
 }

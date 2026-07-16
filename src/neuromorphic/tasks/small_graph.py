@@ -20,6 +20,7 @@ from neuromorphic.tasks.base import (
 )
 
 type GraphPolicy = Callable[[Tensor], int | Tensor]
+type StatefulGraphPolicy = Callable[[Tensor, bool], int | Tensor]
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,8 +54,14 @@ class SmallGraphTask:
     input_dim = 356
     num_classes = 4
 
-    def __init__(self, *, profile: str = "smoke") -> None:
+    def __init__(self, *, profile: str = "smoke", distribution: str = "v1") -> None:
+        if distribution not in {"v1", "scale", "topology", "joint"}:
+            raise ValueError(f"unknown small-graph distribution: {distribution}")
         self.profile = profile
+        self.distribution = distribution
+        self.task_version = (
+            "small-graph-v1" if distribution == "v1" else f"small-graph-p3-{distribution}-v1"
+        )
 
     @staticmethod
     def _randint(generator: torch.Generator, low: int, high: int) -> int:
@@ -63,11 +70,45 @@ class SmallGraphTask:
     def _make_graph(self, split: DatasetSplit, sample_index: int) -> _Graph:
         generator = make_generator(self.task_version, split, sample_index)
         if split == "ood":
-            node_count = self._randint(generator, 11, 17)
+            node_count = (
+                self._randint(generator, 11, 17)
+                if self.distribution in {"v1", "scale", "joint"}
+                else self._randint(generator, 6, 11)
+            )
         else:
             node_count = self._randint(generator, 6, 11)
         adjacency = torch.zeros((self.max_nodes, self.max_nodes), dtype=torch.bool)
         degrees = [0] * node_count
+
+        if split == "ood" and self.distribution in {"topology", "joint"}:
+            for node in range(node_count):
+                neighbor = (node + 1) % node_count
+                adjacency[node, neighbor] = True
+                adjacency[neighbor, node] = True
+                degrees[node] += 1
+                degrees[neighbor] += 1
+            for node in range(0, node_count - 2, 3):
+                neighbor = node + 2
+                adjacency[node, neighbor] = True
+                adjacency[neighbor, node] = True
+                degrees[node] += 1
+                degrees[neighbor] += 1
+        else:
+            self._add_random_edges(adjacency, degrees, node_count, generator)
+
+        start = self._randint(generator, 0, node_count)
+        goal = self._randint(generator, 0, node_count - 1)
+        if goal >= start:
+            goal += 1
+        return _Graph(adjacency, node_count, start, goal)
+
+    def _add_random_edges(
+        self,
+        adjacency: Tensor,
+        degrees: list[int],
+        node_count: int,
+        generator: torch.Generator,
+    ) -> None:
 
         # A bounded-degree random tree guarantees connectivity.
         for node in range(1, node_count):
@@ -93,12 +134,6 @@ class SmallGraphTask:
                 degrees[first] += 1
                 degrees[second] += 1
 
-        start = self._randint(generator, 0, node_count)
-        goal = self._randint(generator, 0, node_count - 1)
-        if goal >= start:
-            goal += 1
-        return _Graph(adjacency, node_count, start, goal)
-
     @staticmethod
     def _distances(adjacency: Tensor, goal: int, node_count: int) -> list[int]:
         distances = [-1] * node_count
@@ -120,6 +155,8 @@ class SmallGraphTask:
         neighbors = torch.nonzero(
             graph.adjacency[current, : graph.node_count], as_tuple=False
         ).flatten()
+        if self.distribution in {"topology", "joint"}:
+            neighbors = neighbors.flip(0)
         action_nodes = torch.full((self.max_actions,), -1, dtype=torch.long)
         action_nodes[: neighbors.numel()] = neighbors
         return action_nodes
@@ -272,6 +309,7 @@ class SmallGraphTask:
                 "content_hashes": tuple(hashes),
                 "sequence_lengths": tuple(lengths),
                 "profile": self.profile,
+                "distribution": self.distribution,
             },
             auxiliary_targets={
                 "optimal_action_mask": optimal_action_mask,
@@ -398,3 +436,63 @@ class SmallGraphTask:
             "success_rate": successes / len(sample_indices),
             "path_excess": total_excess / len(sample_indices),
         }
+
+    def rollout_records(
+        self,
+        policy: StatefulGraphPolicy,
+        split: DatasetSplit,
+        sample_indices: Sequence[int],
+        *,
+        device: torch.device = CPU_DEVICE,
+        max_steps: int | None = None,
+    ) -> list[dict[str, object]]:
+        """Return one auditable live-rollout record per sample with explicit reset."""
+
+        if not sample_indices:
+            raise ValueError("sample_indices cannot be empty")
+        records: list[dict[str, object]] = []
+        for sample_index in sample_indices:
+            graph = self._make_graph(split, sample_index)
+            distances = self._distances(graph.adjacency, graph.goal, graph.node_count)
+            shortest = distances[graph.start]
+            horizon = max_steps or max(graph.node_count * 2, shortest * 2)
+            current = graph.start
+            steps = 0
+            optimal = 0
+            invalid = 0
+            reset = True
+            while current != graph.goal and steps < horizon:
+                action = self._action_id(
+                    policy(self._observation(graph, current).to(device), reset)
+                )
+                reset = False
+                action_nodes = self._action_nodes(graph, current)
+                steps += 1
+                if 0 <= action < self.max_actions:
+                    next_node = int(action_nodes[action].item())
+                    if next_node >= 0:
+                        if distances[next_node] == distances[current] - 1:
+                            optimal += 1
+                        current = next_node
+                    else:
+                        invalid += 1
+                else:
+                    invalid += 1
+            records.append(
+                {
+                    "schema_version": "p3-small-graph-rollout-v1",
+                    "task_id": self.task_id,
+                    "task_version": self.task_version,
+                    "distribution": self.distribution,
+                    "split": split,
+                    "sample_index": sample_index,
+                    "success_rate": float(current == graph.goal),
+                    "path_excess": float(max(steps - shortest, 0)),
+                    "optimal_action_rate": optimal / max(steps, 1),
+                    "invalid_actions": invalid,
+                    "node_count": graph.node_count,
+                    "shortest_distance": shortest,
+                    "bootstrap_stratum": f"nodes-{graph.node_count}/distance-{shortest}",
+                }
+            )
+        return records
