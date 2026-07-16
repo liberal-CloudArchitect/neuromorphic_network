@@ -653,7 +653,9 @@ def _qualification_diagnostics(
         optimizer.step()
         outputs.append(output)
     tolerance = 1e-5 if device.type == "mps" else 0.0
-    logits_difference = float((outputs[0].logits - outputs[1].logits).abs().max().cpu())
+    logits_difference = float(
+        (outputs[0].logits.detach() - outputs[1].logits.detach()).abs().max().cpu()
+    )
     gradient_difference = max(
         float((gradients[0][name] - gradients[1][name]).abs().max().cpu()) for name in gradients[0]
     )
