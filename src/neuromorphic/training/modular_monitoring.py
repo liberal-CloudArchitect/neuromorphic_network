@@ -76,8 +76,8 @@ def gradient_cosine_similarity(
             raise ValueError(f"gradient shape changed: {name}")
         if not torch.isfinite(left).all() or not torch.isfinite(right).all():
             raise ValueError(f"gradient contains a non-finite value: {name}")
-        left_cpu = left.detach().reshape(-1).to(device="cpu", dtype=torch.float64)
-        right_cpu = right.detach().reshape(-1).to(device="cpu", dtype=torch.float64)
+        left_cpu = left.detach().reshape(-1).cpu().to(torch.float64)
+        right_cpu = right.detach().reshape(-1).cpu().to(torch.float64)
         dot += torch.dot(left_cpu, right_cpu)
         previous_norm += torch.dot(left_cpu, left_cpu)
         current_norm += torch.dot(right_cpu, right_cpu)
@@ -112,8 +112,8 @@ def state_dynamics(
                 raise ValueError(f"state tensor contract changed: {module_id}.{name}")
             if not torch.isfinite(before).all() or not torch.isfinite(after).all():
                 raise ValueError(f"state tensor is not finite: {module_id}.{name}")
-            after_cpu = after.detach().to(device="cpu", dtype=torch.float64)
-            before_cpu = before.detach().to(device="cpu", dtype=torch.float64)
+            after_cpu = after.detach().cpu().to(torch.float64)
+            before_cpu = before.detach().cpu().to(torch.float64)
             delta_cpu = after_cpu - before_cpu
             norm_squared += float(after_cpu.square().sum().item())
             change_squared += float(delta_cpu.square().sum().item())

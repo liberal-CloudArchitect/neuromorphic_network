@@ -103,6 +103,27 @@ def test_routing_statistics_runs_natively_on_mps() -> None:
     assert stats.capacity_drops == 0
 
 
+@pytest.mark.mps
+def test_gradient_and_state_monitoring_move_before_float64_on_mps() -> None:
+    if not torch.backends.mps.is_available():
+        pytest.skip("MPS is unavailable")
+    device = torch.device("mps")
+    gradient = {"weight": torch.ones(2, device=device)}
+    assert gradient_cosine_similarity(gradient, gradient) == pytest.approx(1.0)
+    before = {
+        WORKING_MEMORY: ModuleState(
+            WORKING_MEMORY, "v1", {"slots": torch.zeros(1, 2, device=device)}
+        )
+    }
+    after = {
+        WORKING_MEMORY: ModuleState(
+            WORKING_MEMORY, "v1", {"slots": torch.ones(1, 2, device=device)}
+        )
+    }
+    dynamics = state_dynamics(before, after)[WORKING_MEMORY]
+    assert dynamics.change_norm == pytest.approx(math.sqrt(2.0))
+
+
 def test_modular_mac_profile_separates_dense_and_active_optional_cost() -> None:
     records = (
         ModuleMacRecord("boundary.associative", "boundary", "Linear", 100, 8, 8, 50, 50),
