@@ -9,6 +9,8 @@ from neuromorphic.core.contracts import (
     Phase,
     TelemetryRecord,
 )
+from neuromorphic.core.module_registry import ModuleRegistry
+from neuromorphic.core.network_state import NetworkState
 from neuromorphic.core.registry import (
     MODULE_IDS,
     OPTIONAL_EXPERT_IDS,
@@ -24,7 +26,9 @@ __all__ = [
     "BrainPacket",
     "ModuleContext",
     "ModuleOutput",
+    "ModuleRegistry",
     "ModuleState",
+    "NetworkState",
     "Phase",
     "TelemetryRecord",
     "is_registered_module",
