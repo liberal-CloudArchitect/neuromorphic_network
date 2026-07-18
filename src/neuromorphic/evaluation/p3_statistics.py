@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import cast
 
 import numpy as np
 
@@ -63,21 +64,31 @@ def forgetting(best_before_later_tasks: float, final_score: float) -> float:
     return best_before_later_tasks - final_score
 
 
-def _record_key(record: Mapping[str, object]) -> tuple[int, str, int, str]:
+def _record_key(record: Mapping[str, object]) -> tuple[int, str, str, str, int, str]:
     try:
         seed = record["seed"]
         stratum = record["stratum"]
         sample_index = record["sample_index"]
         task = record["task_id"]
+        split = record["split"]
+        distribution = record["distribution"]
     except KeyError as error:
         raise ValueError(f"paired record is missing {error.args[0]}") from error
     if isinstance(seed, bool) or not isinstance(seed, int):
         raise ValueError("paired record seed must be an integer")
     if isinstance(sample_index, bool) or not isinstance(sample_index, int):
         raise ValueError("paired sample_index must be an integer")
-    if not isinstance(stratum, str) or not stratum or not isinstance(task, str):
-        raise ValueError("paired task and stratum must be non-empty strings")
-    return seed, task, sample_index, stratum
+    strings = (task, split, distribution, stratum)
+    if not all(isinstance(value, str) and value for value in strings):
+        raise ValueError("paired task, split, distribution, and stratum must be non-empty strings")
+    return (
+        seed,
+        cast(str, task),
+        cast(str, split),
+        cast(str, distribution),
+        sample_index,
+        cast(str, stratum),
+    )
 
 
 def paired_hierarchical_bootstrap(
@@ -93,8 +104,15 @@ def paired_hierarchical_bootstrap(
     if samples <= 0:
         raise ValueError("bootstrap samples must be positive")
 
-    def indexed(records: Sequence[Mapping[str, object]]) -> dict[tuple[int, str, int, str], float]:
-        result: dict[tuple[int, str, int, str], float] = {}
+    def indexed(
+        records: Sequence[Mapping[str, object]],
+    ) -> dict[tuple[int, str, str, str, int, str], float]:
+        identities = {(record.get("model_id"), record.get("variant_id")) for record in records}
+        if len(identities) != 1 or any(
+            not isinstance(value, str) or not value for identity in identities for value in identity
+        ):
+            raise ValueError("each paired input must contain one model_id/variant_id identity")
+        result: dict[tuple[int, str, str, str, int, str], float] = {}
         for record in records:
             key = _record_key(record)
             if key in result:
@@ -119,7 +137,7 @@ def paired_hierarchical_bootstrap(
         lambda: defaultdict(list)
     )
     for key in sorted(left):
-        grouped[key[0]][key[3]].append(left[key] - right[key])
+        grouped[key[0]][key[5]].append(left[key] - right[key])
     observed = [
         float(np.mean([value for values in grouped[seed].values() for value in values]))
         for seed in seed_labels

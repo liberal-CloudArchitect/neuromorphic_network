@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import torch
 from torch import Tensor, nn
 
@@ -51,6 +53,7 @@ class SensoryEncoder(nn.Module):
         *,
         modality: str = "symbolic",
         state: ModuleState | None = None,
+        mode: Literal["full", "shallow"] = "full",
     ) -> ModuleOutput:
         """Create the first legal packet directly from adapter features."""
 
@@ -67,17 +70,34 @@ class SensoryEncoder(nn.Module):
             source_module=self.module_id,
             goal_context=goal_context,
         )
-        return self.forward(packet, state, context)
+        return self.forward_with_mode(packet, state, context, mode=mode)
 
     def forward(
         self, packet: BrainPacket, state: ModuleState, context: ModuleContext
     ) -> ModuleOutput:
+        return self.forward_with_mode(packet, state, context, mode="full")
+
+    def forward_with_mode(
+        self,
+        packet: BrainPacket,
+        state: ModuleState,
+        context: ModuleContext,
+        *,
+        mode: Literal["full", "shallow"],
+    ) -> ModuleOutput:
+        """Encode a packet with either the full residual MLP or a shallow norm control."""
+
         validate_inputs(
             packet, state, context, module_id=self.module_id, version=self.state_version
         )
         if packet.representation.shape[-1] != self.feature_dim:
             raise ValueError(f"representation feature size must be {self.feature_dim}")
-        encoded = packet.representation + self.mlp(self.norm(packet.representation))
+        if mode == "full":
+            encoded = packet.representation + self.mlp(self.norm(packet.representation))
+        elif mode == "shallow":
+            encoded = self.norm(packet.representation)
+        else:
+            raise ValueError(f"unsupported sensory encoder mode: {mode}")
         encoded = torch.where(packet.valid_mask.unsqueeze(-1), encoded, packet.representation)
         return ModuleOutput(packet_from(packet, encoded, self.module_id), state)
 

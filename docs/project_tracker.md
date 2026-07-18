@@ -1,7 +1,7 @@
 ---
 title: 项目实施追踪台账
 status: ACTIVE
-last_updated: 2026-07-16
+last_updated: 2026-07-18
 ---
 
 # 项目实施追踪台账
@@ -60,12 +60,12 @@ last_updated: 2026-07-16
 | ID | 工作项 | 状态 | 当前证据 |
 |---|---|---|---|
 | P3-01 | 冻结 protocol-v2、CR-002 与双 Gate | DONE | `docs/p3_implementation_spec.md`、`docs/change_requests/CR-002.md` |
-| P3-02 | P3 数据、shared 双主基线和 Transformer-v2 | IN_PROGRESS | 待实现与测试 |
-| P3-03 | 逐样本评估、AULC、严格配对统计 | IN_PROGRESS | 待实现与测试 |
-| P3-04 | checkpoint-v3、suite registry 与可恢复矩阵 | IN_PROGRESS | 待实现与测试 |
-| P3-05 | 因果干预、顺序学习、表征和成本分析 | IN_PROGRESS | 待实现与测试 |
-| P3-06 | network-mvp-v1 bundle 与推理接口 | IN_PROGRESS | 仅 Gate 通过后发布正式 bundle |
-| P3-07 | CPU/MPS qualification 与后台管理脚本 | IN_PROGRESS | 待实现与测试 |
-| P3-08 | 正式三 seed 后台矩阵 | BLOCKED_USER_RUN | qualification 通过后交付命令 |
+| P3-02 | P3 数据、shared 双主基线和 Transformer-v2 | DONE | 单元/集成测试与 39-cell CPU 小矩阵 |
+| P3-03 | 逐样本评估、AULC、严格配对统计 | DONE | strict pair fixture、Holm/AULC 测试 |
+| P3-04 | checkpoint-v3、suite registry 与可恢复矩阵 | IN_PROGRESS | sampler/RNG/shape/dtype 预验证、累计墙钟和安全恢复已通过 CPU/MPS 工程资格；待 clean SHA 冻结 |
+| P3-05 | 因果干预、顺序学习、表征和成本分析 | IN_PROGRESS | CPU/MPS dirty-worktree 资格均 39/39；正式结果待后台 run |
+| P3-06 | network-mvp-v1 bundle 与推理接口 | IN_PROGRESS | qualification fixture 可加载；仅科学 Gate 通过后发布正式 bundle |
+| P3-07 | CPU/MPS qualification、pilot 与后台管理脚本 | IN_PROGRESS | CPU/MPS 39/39 工程通过；clean SHA 重跑、远程 CI、qualification lock 和 12-cell pilot 待完成 |
+| P3-08 | 正式三 seed 后台矩阵 | BLOCKED_QUALIFICATION | clean-SHA qualification、CI 与 pilot selection 冻结后交付正式 start |
 | P3-09 | GATE-3 独立评审 | NOT_STARTED | 正式 run 完成后执行 |
 | P3-10 | GATE-NN-MVP 独立评审 | NOT_STARTED | 正式 run 完成后执行 |

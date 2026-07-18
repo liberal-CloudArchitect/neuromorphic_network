@@ -234,7 +234,12 @@ def main(arguments: list[str] | None = None) -> int:
         print(json.dumps({"error": str(error), "exit_code": 2}), file=sys.stderr)
         return 2
     print(json.dumps(result, sort_keys=True))
-    if result.get("status") in {"qualification_failed", "resource_limit"}:
+    if result.get("status") in {
+        "qualification_failed",
+        "pilot_failed",
+        "completed_with_failures",
+        "resource_limit",
+    }:
         return 5
     return 0
 

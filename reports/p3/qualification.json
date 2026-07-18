@@ -1,0 +1,26 @@
+{
+  "schema_version": "p3-qualification-summary-v1",
+  "status": "CLEAN_SHA_RERUN_REQUIRED",
+  "scientific_evidence": false,
+  "cpu": {
+    "commit": "eef8135a9b43dc3f3e7c21f30f114aa98cde0798",
+    "run_id": "p3-qualification-20260718T130205Z",
+    "completed_cells": 39,
+    "total_cells": 39,
+    "sample_records": 9728,
+    "registered_artifacts": 159,
+    "wall_clock_seconds": 135.03848362500003,
+    "status": "engineering_passed_dirty_worktree"
+  },
+  "mps": {
+    "commit": "eef8135a9b43dc3f3e7c21f30f114aa98cde0798",
+    "run_id": "p3-qualification-20260718T130439Z",
+    "completed_cells": 39,
+    "total_cells": 39,
+    "sample_records": 9728,
+    "registered_artifacts": 159,
+    "wall_clock_seconds": 1017.6647355829998,
+    "status": "engineering_passed_dirty_worktree"
+  },
+  "blocking_condition": "The implementation must be committed and pushed, remote CPU CI must pass, and the 39-cell MPS qualification must be rerun from that clean SHA before qualification can be frozen."
+}

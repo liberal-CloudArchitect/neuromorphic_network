@@ -155,3 +155,32 @@ def test_forced_routing_is_batch_reorder_equivalent() -> None:
                 assert torch.allclose(tensor, reordered_tensor, atol=1e-6)
             else:
                 assert torch.equal(tensor, reordered_tensor)
+
+
+def test_working_reset_every_step_removes_cross_step_state() -> None:
+    torch.manual_seed(7)
+    batch = DelayedRuleSwitchTask().generate("train", [0])
+    model = ModularBrainNetwork()
+    route = (WORKING_MEMORY, PREDICTIVE_ADAPTER)
+    reset_output = model.forward_batch(
+        batch,
+        forced_experts=route,
+        reset_experts_every_step=(WORKING_MEMORY,),
+    )
+    last = int(batch.valid_mask[0].sum().item()) - 1
+    last_batch = type(batch)(
+        inputs=batch.inputs[:, last : last + 1],
+        targets=batch.targets[:, last : last + 1],
+        valid_mask=batch.valid_mask[:, last : last + 1],
+        loss_mask=batch.loss_mask[:, last : last + 1],
+        episode_ids=torch.zeros_like(batch.episode_ids[:, last : last + 1]),
+        metadata=batch.metadata,
+        auxiliary_targets={
+            name: value[:, last : last + 1] for name, value in batch.auxiliary_targets.items()
+        },
+    )
+    last_output = model.forward_batch(last_batch, forced_experts=route)
+
+    reset_slots = reset_output.state.get(WORKING_MEMORY).tensors["slots"]
+    last_slots = last_output.state.get(WORKING_MEMORY).tensors["slots"]
+    assert torch.allclose(reset_slots, last_slots, atol=1e-6)

@@ -277,6 +277,9 @@ class ModularBrainNetwork(nn.Module):
         forced_experts: tuple[str, ...] | None = None,
         routing_mode: Literal["learned", "fixed", "random", "dense"] = "learned",
         disabled_experts: tuple[str, ...] = (),
+        reset_experts_every_step: tuple[str, ...] = (),
+        encoder_mode: Literal["full", "shallow"] = "full",
+        selector_mode: Literal["integrated", "direct"] = "integrated",
     ) -> ModularBrainOutput:
         """Execute a single time step; ``inputs`` and controls use T=1."""
 
@@ -294,6 +297,14 @@ class ModularBrainNetwork(nn.Module):
         reset_rows = context.reset_mask[:, 0] & control.valid_mask[:, 0]
         state = self._reset_state(state, reset_rows)
         valid_rows = control.valid_mask[:, 0]
+        unknown_reset = set(reset_experts_every_step).difference(OPTIONAL_EXPERT_IDS)
+        if unknown_reset:
+            raise ValueError(f"unknown reset-every-step experts: {sorted(unknown_reset)}")
+        for module_id in reset_experts_every_step:
+            module_state = self.registry.get(module_id).reset_state(
+                state.get(module_id), valid_rows
+            )
+            state = state.replace(module_state)
         step_index = state.valid_step_counts.unsqueeze(1)
         adapted = self.boundary_adapters(inputs, control.task_id)
 
@@ -305,6 +316,7 @@ class ModularBrainNetwork(nn.Module):
             control.goal_context,
             context,
             state=state.get(SENSORY_ENCODER),
+            mode=encoder_mode,
         )
         state = state.replace(sensory_output.state)
         router = cast(SparseRouter, self.registry.get(SPARSE_ROUTER))
@@ -380,8 +392,11 @@ class ModularBrainNetwork(nn.Module):
         telemetry.extend(router_output.telemetry_events)
 
         selector = cast(ActionSelector, self.registry.get(ACTION_SELECTOR))
-        selector_output = selector.forward(
-            router_output.packet, state.get(ACTION_SELECTOR), context
+        selector_output = selector.forward_with_mode(
+            router_output.packet,
+            state.get(ACTION_SELECTOR),
+            context,
+            mode=selector_mode,
         )
         if selector_output.action_logits is None:
             raise RuntimeError("action selector did not return action logits")
@@ -487,6 +502,9 @@ class ModularBrainNetwork(nn.Module):
         forced_experts: tuple[str, ...] | None = None,
         routing_mode: Literal["learned", "fixed", "random", "dense"] = "learned",
         disabled_experts: tuple[str, ...] = (),
+        reset_experts_every_step: tuple[str, ...] = (),
+        encoder_mode: Literal["full", "shallow"] = "full",
+        selector_mode: Literal["integrated", "direct"] = "integrated",
     ) -> ModularBrainOutput:
         """Execute a padded task batch sequentially with episode-local state."""
 
@@ -500,6 +518,9 @@ class ModularBrainNetwork(nn.Module):
                 forced_experts=forced_experts,
                 routing_mode=routing_mode,
                 disabled_experts=disabled_experts,
+                reset_experts_every_step=reset_experts_every_step,
+                encoder_mode=encoder_mode,
+                selector_mode=selector_mode,
             )
 
     def _forward_batch_trusted(
@@ -512,6 +533,9 @@ class ModularBrainNetwork(nn.Module):
         forced_experts: tuple[str, ...] | None,
         routing_mode: Literal["learned", "fixed", "random", "dense"],
         disabled_experts: tuple[str, ...],
+        reset_experts_every_step: tuple[str, ...],
+        encoder_mode: Literal["full", "shallow"],
+        selector_mode: Literal["integrated", "direct"],
     ) -> ModularBrainOutput:
         control = task_control_from_batch(batch)
         if state is None:
@@ -553,6 +577,9 @@ class ModularBrainNetwork(nn.Module):
                 forced_experts=forced_experts,
                 routing_mode=routing_mode,
                 disabled_experts=disabled_experts,
+                reset_experts_every_step=reset_experts_every_step,
+                encoder_mode=encoder_mode,
+                selector_mode=selector_mode,
             )
             state = output.state
             packets.append(output.packet)

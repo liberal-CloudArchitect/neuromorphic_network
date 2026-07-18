@@ -76,15 +76,19 @@ make check         # 本地完整门禁
 P3 qualification 和远程 CI 均通过后，正式实验由后台脚本管理：
 
 ```bash
-./scripts/p3_full_run.sh start
+./scripts/p3_full_run.sh freeze-qualification artifacts/runs/<qualification-run-id>
+./scripts/p3_full_run.sh record-ci
+./scripts/p3_full_run.sh start   # 首次：12-cell、每 cell 1,000 updates 的 pilot
 ./scripts/p3_full_run.sh status
 ./scripts/p3_full_run.sh logs
 ./scripts/p3_full_run.sh resume
 ./scripts/p3_full_run.sh stop
 ./scripts/p3_full_run.sh verify
+./scripts/p3_full_run.sh freeze-pilot artifacts/runs/<pilot-run-id>
+./scripts/p3_full_run.sh start   # 再次：使用冻结 preset 的三 seed 正式矩阵
 ```
 
-`start` 会验证 clean SHA、`HEAD == origin/main`、qualification lock、MPS、电源和磁盘。后台运行只写入 ignored artifacts；关闭终端不会停止进程，机器重启后使用 `resume`。
+`start` 会验证 clean SHA、`HEAD == origin/main`、qualification/CI lock、MPS、电源和磁盘。首次启动 pilot；pilot 完成并冻结选择后，再次启动才进入正式矩阵。后台运行只写入 ignored artifacts；关闭终端不会停止进程，机器重启后使用 `resume`。
 
 验收记录：[GATE-0](reports/gates/GATE-0.md)、[GATE-1](reports/gates/GATE-1.md)、[GATE-2](reports/gates/GATE-2.md)；P2 完整运行摘要见 [完整 MPS Suite](reports/p2/full_mps_suite.md)。
 

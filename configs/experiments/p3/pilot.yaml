@@ -1,28 +1,28 @@
 schema_version: p3-suite-v1
 protocol_version: p3-protocol-v2
-profile: qualification
+profile: pilot
 qualification_only: true
-device: cpu
+device: mps
 output_root: artifacts/runs
 control_root: artifacts/p3/control
 seeds: [7]
 data:
-  train: 64
-  validation: 32
-  analysis: 32
-  test: 32
-  ood: 32
+  train: 8192
+  validation: 2048
+  analysis: 1
+  test: 1
+  ood: 1
 budget:
-  batch_size: 16
-  shared_steps_per_task: 4
-  per_task_steps: 4
-  causal_steps: 4
-  continual_steps_per_stage: 2
-  validation_interval: 2
-  checkpoint_interval: 2
-  patience: 10
+  batch_size: 64
+  shared_steps_per_task: 5000
+  per_task_steps: 5000
+  causal_steps: 5000
+  continual_steps_per_stage: 1500
+  validation_interval: 100
+  checkpoint_interval: 100
+  patience: 100
   min_delta: 0.001
-  wall_clock_hours: 2
+  wall_clock_hours: 24
   bootstrap_samples: 200
 optimizer:
   learning_rate: 0.0003

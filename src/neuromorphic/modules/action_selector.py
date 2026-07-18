@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import torch
 from torch import Tensor, nn
 
@@ -47,6 +49,18 @@ class ActionSelector(nn.Module):
     def forward(
         self, packet: BrainPacket, state: ModuleState, context: ModuleContext
     ) -> ModuleOutput:
+        return self.forward_with_mode(packet, state, context, mode="integrated")
+
+    def forward_with_mode(
+        self,
+        packet: BrainPacket,
+        state: ModuleState,
+        context: ModuleContext,
+        *,
+        mode: Literal["integrated", "direct"],
+    ) -> ModuleOutput:
+        """Run the normal conflict core or a direct-head control path."""
+
         validate_inputs(
             packet, state, context, module_id=self.module_id, version=self.state_version
         )
@@ -55,7 +69,12 @@ class ActionSelector(nn.Module):
         except KeyError as error:
             raise ValueError(f"unsupported action task: {context.task_id}") from error
         head_name = context.task_id.removesuffix(".v1")
-        integrated = self.integration(packet.representation)
+        if mode == "integrated":
+            integrated = self.integration(packet.representation)
+        elif mode == "direct":
+            integrated = packet.representation
+        else:
+            raise ValueError(f"unsupported action selector mode: {mode}")
         integrated = torch.where(packet.valid_mask.unsqueeze(-1), integrated, packet.representation)
         logits = self.heads[head_name](integrated)
         if logits.shape[-1] != class_count:

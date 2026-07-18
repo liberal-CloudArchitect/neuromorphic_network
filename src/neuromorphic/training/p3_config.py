@@ -52,6 +52,12 @@ class P3OptimizerConfig(_StrictModel):
     gradient_clip_norm: float = Field(default=1.0, gt=0.0)
 
 
+class P3SelectedPresets(_StrictModel):
+    modular: Literal["preset-0", "preset-1", "preset-2", "preset-3"]
+    gru: Literal["preset-0", "preset-1", "preset-2", "preset-3"]
+    transformer: Literal["preset-0", "preset-1", "preset-2", "preset-3"]
+
+
 class InterventionSpec(_StrictModel):
     schema_version: Literal["intervention-v1"] = "intervention-v1"
     target: Literal[
@@ -111,7 +117,7 @@ class P3ExperimentCell(_StrictModel):
 class P3SuiteConfig(_StrictModel):
     schema_version: Literal["p3-suite-v1"] = "p3-suite-v1"
     protocol_version: Literal["p3-protocol-v2"] = "p3-protocol-v2"
-    profile: Literal["qualification", "full"]
+    profile: Literal["qualification", "pilot", "full"]
     qualification_only: bool
     device: Literal["auto", "cpu", "mps", "cuda"] = "auto"
     output_root: Path = Path("artifacts/runs")
@@ -125,6 +131,7 @@ class P3SuiteConfig(_StrictModel):
     task_order: tuple[str, str, str] = P3_TASK_ORDER
     expected_git_commit: str | None = None
     qualification_report: Path | None = None
+    selected_presets: P3SelectedPresets | None = None
 
     @model_validator(mode="after")
     def validate_profile(self) -> P3SuiteConfig:
@@ -145,6 +152,45 @@ class P3SuiteConfig(_StrictModel):
                 raise ValueError("qualification data and batch budget are frozen")
             if self.budget.bootstrap_samples != 200:
                 raise ValueError("qualification requires 200 bootstrap samples")
+            qualification_budget = (
+                self.budget.shared_steps_per_task,
+                self.budget.per_task_steps,
+                self.budget.causal_steps,
+                self.budget.continual_steps_per_stage,
+                self.budget.validation_interval,
+                self.budget.checkpoint_interval,
+                self.budget.wall_clock_hours,
+            )
+            if qualification_budget != (4, 4, 4, 2, 2, 2, 2.0):
+                raise ValueError(
+                    "qualification update, checkpoint, and wall-clock budgets are frozen"
+                )
+        elif self.profile == "pilot":
+            if not self.qualification_only or self.seeds != (7,):
+                raise ValueError("pilot requires qualification_only=true and seed 7")
+            expected_data = (8_192, 2_048, 1, 1, 1)
+            actual_data = (
+                self.data.train,
+                self.data.validation,
+                self.data.analysis,
+                self.data.test,
+                self.data.ood,
+            )
+            if actual_data != expected_data or self.budget.batch_size != 64:
+                raise ValueError("pilot data and batch budgets are frozen")
+            if self.selected_presets is not None:
+                raise ValueError("pilot cannot consume a prior preset selection")
+            if self.device != "mps":
+                raise ValueError("formal pilot selection must run on MPS")
+            pilot_budget = (
+                self.budget.validation_interval,
+                self.budget.checkpoint_interval,
+                self.budget.patience,
+                self.budget.wall_clock_hours,
+                self.budget.bootstrap_samples,
+            )
+            if pilot_budget != (100, 100, 100, 24.0, 200):
+                raise ValueError("pilot validation, checkpoint, and wall-clock budgets are frozen")
         else:
             if self.qualification_only or self.seeds != P3_FORMAL_SEEDS:
                 raise ValueError("full P3 requires formal seeds and qualification_only=false")
@@ -164,13 +210,40 @@ class P3SuiteConfig(_StrictModel):
             )
             if actual_data != expected_data or self.budget.batch_size != 64:
                 raise ValueError("full P3 data and batch budgets are frozen")
+            if self.device != "mps":
+                raise ValueError("full P3 must run on MPS")
+            formal_budget = (
+                self.budget.per_task_steps,
+                self.budget.causal_steps,
+                self.budget.continual_steps_per_stage,
+                self.budget.validation_interval,
+                self.budget.checkpoint_interval,
+                self.budget.patience,
+                self.budget.min_delta,
+            )
+            if formal_budget != (5_000, 5_000, 1_500, 100, 100, 10, 0.001):
+                raise ValueError("full P3 training and validation budgets are frozen")
+        if self.optimizer.gradient_clip_norm != 1.0:
+            raise ValueError("P3 gradient clipping is frozen at 1.0")
         return self
 
     def compatible_dict(self) -> dict[str, object]:
-        return self.model_dump(
+        compatible = self.model_dump(
             mode="json",
             exclude={"run_id", "resume", "output_root", "control_root"},
         )
+        compatible["experiment_matrix"] = [
+            cell.model_dump(mode="json") for cell in build_p3_matrix(self)
+        ]
+        return compatible
+
+    def matrix_hash(self) -> str:
+        encoded = json.dumps(
+            [cell.model_dump(mode="json") for cell in build_p3_matrix(self)],
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        return hashlib.sha256(encoded).hexdigest()
 
     def config_hash(self) -> str:
         encoded = json.dumps(self.compatible_dict(), sort_keys=True, separators=(",", ":")).encode()
@@ -208,10 +281,13 @@ def _cell(
 
 def build_p3_matrix(config: P3SuiteConfig) -> tuple[P3ExperimentCell, ...]:
     cells: list[P3ExperimentCell] = []
-    if config.profile == "qualification":
+    if config.profile in {"qualification", "pilot"}:
         for model in P3_MODELS:
             for preset in range(4):
-                cells.append(_cell("pilot", "shared", model, f"preset-{preset}", 7, 2))
+                steps = 2 if config.profile == "qualification" else 1_000
+                cells.append(_cell("pilot", "shared", model, f"preset-{preset}", 7, steps))
+    if config.profile == "pilot":
+        return tuple(cells)
     for seed in config.seeds:
         shared_steps = (
             4 * len(P3_TASK_ORDER)
@@ -263,6 +339,9 @@ def build_p3_matrix(config: P3SuiteConfig) -> tuple[P3ExperimentCell, ...]:
                 )
             )
         controls = (
+            ("acute-episodic-off", "episodic_memory.v1", "no_read_write"),
+            ("acute-working-reset", "working_memory.v1", "reset_every_step"),
+            ("acute-predictive-off", "predictive_adapter.v1", "loss_zero"),
             ("router-dense", "sparse_router.v1", "dense"),
             ("router-fixed", "sparse_router.v1", "fixed"),
             ("router-random", "sparse_router.v1", "random"),
@@ -305,6 +384,7 @@ __all__ = [
     "P3BudgetConfig",
     "P3DataConfig",
     "P3ExperimentCell",
+    "P3SelectedPresets",
     "P3SuiteConfig",
     "build_p3_matrix",
     "load_p3_suite_config",

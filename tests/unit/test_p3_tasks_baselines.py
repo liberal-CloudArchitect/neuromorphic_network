@@ -41,8 +41,11 @@ def test_shared_baselines_cover_three_task_boundaries() -> None:
         ):
             batch = create_task(task_id, profile="smoke").generate("train", [0, 1])
             output = model(batch)
+            representation = model.encode_representation(batch)
             assert output.logits.shape[:2] == batch.targets.shape
+            assert representation.shape[:2] == batch.targets.shape
             assert torch.isfinite(output.logits).all()
+            assert torch.isfinite(representation).all()
 
 
 def test_shared_parameter_matching_is_within_five_percent() -> None:

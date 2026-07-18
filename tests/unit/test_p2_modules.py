@@ -68,6 +68,30 @@ def test_sensory_encoder_creates_first_legal_packet_and_backpropagates() -> None
     assert values.grad is not None
 
 
+def test_sensory_shallow_control_bypasses_residual_mlp() -> None:
+    module = SensoryEncoder()
+    values = torch.randn(2, 2, 128)
+    valid = torch.ones(2, 2, dtype=torch.bool)
+    context = ModuleContext(
+        "associative_recall.v1",
+        "evaluate",
+        torch.zeros(2, 2, dtype=torch.bool),
+        OPTIONAL_EXPERT_IDS,
+    )
+    full = module.forward_inputs(values, valid, torch.arange(2).repeat(2, 1), _goal(2, 2), context)
+    shallow = module.forward_inputs(
+        values,
+        valid,
+        torch.arange(2).repeat(2, 1),
+        _goal(2, 2),
+        context,
+        mode="shallow",
+    )
+
+    assert torch.allclose(shallow.packet.representation, module.norm(values))
+    assert not torch.allclose(full.packet.representation, shallow.packet.representation)
+
+
 def test_episodic_memory_stages_after_read_then_commits_for_next_step() -> None:
     module = EpisodicMemory()
     store = _packet(batch=1)
@@ -178,6 +202,21 @@ def test_action_selector_isolates_heads_and_masks_invalid_graph_actions() -> Non
     assert output.action_logits is not None
     assert output.action_logits.shape == (1, 1, 4)
     assert output.action_logits[..., 2:].max() < -1.0e20
+
+
+def test_action_selector_direct_head_bypasses_conflict_integration() -> None:
+    module = ActionSelector()
+    packet = _packet(batch=2, source=SPARSE_ROUTER)
+    state = module.initial_state(2, device=torch.device("cpu"), dtype=torch.float32)
+    context = _context(packet)
+    integrated = module.forward_with_mode(packet, state, context, mode="integrated")
+    direct = module.forward_with_mode(packet, state, context, mode="direct")
+
+    expected = module.heads["associative_recall"](packet.representation)
+    assert direct.action_logits is not None
+    assert integrated.action_logits is not None
+    assert torch.allclose(direct.action_logits, expected)
+    assert not torch.allclose(integrated.action_logits, direct.action_logits)
 
 
 def test_router_exact_top2_capacity_ties_padding_and_combine_source() -> None:

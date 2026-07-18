@@ -9,11 +9,15 @@ from neuromorphic.evaluation.p3_statistics import (
 )
 
 
-def _records(offset: float) -> list[dict[str, object]]:
+def _records(offset: float, variant: str = "reference") -> list[dict[str, object]]:
     return [
         {
             "seed": seed,
             "task_id": "task",
+            "split": "test",
+            "distribution": "v1",
+            "model_id": "modular",
+            "variant_id": variant,
             "sample_index": sample,
             "stratum": f"s-{sample % 2}",
             "value": offset + seed / 1000 + sample / 100,
@@ -24,7 +28,9 @@ def _records(offset: float) -> list[dict[str, object]]:
 
 
 def test_paired_bootstrap_preserves_known_difference() -> None:
-    result = paired_hierarchical_bootstrap(_records(1.0), _records(0.75), samples=500, rng_seed=7)
+    result = paired_hierarchical_bootstrap(
+        _records(1.0), _records(0.75, "comparison"), samples=500, rng_seed=7
+    )
     assert result.estimate == pytest.approx(0.25)
     assert result.lower == pytest.approx(0.25)
     assert result.upper == pytest.approx(0.25)
@@ -34,9 +40,15 @@ def test_paired_bootstrap_preserves_known_difference() -> None:
 def test_paired_bootstrap_rejects_duplicate_or_mismatched_samples() -> None:
     reference = _records(1.0)
     with pytest.raises(ValueError, match="duplicate"):
-        paired_hierarchical_bootstrap([*reference, reference[0]], _records(0.5), samples=10)
+        paired_hierarchical_bootstrap(
+            [*reference, reference[0]], _records(0.5, "comparison"), samples=10
+        )
     with pytest.raises(ValueError, match="identical"):
-        paired_hierarchical_bootstrap(reference[:-1], _records(0.5), samples=10)
+        paired_hierarchical_bootstrap(reference[:-1], _records(0.5, "comparison"), samples=10)
+    mixed = _records(1.0)
+    mixed[0]["variant_id"] = "unexpected"
+    with pytest.raises(ValueError, match="one model_id/variant_id"):
+        paired_hierarchical_bootstrap(mixed, _records(0.5, "comparison"), samples=10)
 
 
 def test_p3_curve_and_normalization_formulas() -> None:

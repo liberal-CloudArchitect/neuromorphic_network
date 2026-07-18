@@ -89,10 +89,15 @@ class SharedGRUBaseline(nn.Module):
         self.backbone = nn.GRU(hidden_size, hidden_size, num_layers=layers, batch_first=True)
 
     def forward(self, batch: TaskBatch) -> BaselineOutput:
+        encoded = self.encode_representation(batch)
+        return self.io.decode(encoded, _task_id(batch))
+
+    def encode_representation(self, batch: TaskBatch) -> Tensor:
+        """Return the shared recurrent representation for registered analysis."""
+
         batch.validate()
-        task_id = _task_id(batch)
         encoded, _ = self.backbone(self.io.encode(batch))
-        return self.io.decode(encoded, task_id)
+        return cast(Tensor, encoded)
 
 
 class SharedTransformerBaseline(nn.Module):
@@ -126,8 +131,13 @@ class SharedTransformerBaseline(nn.Module):
         self.backbone = nn.TransformerEncoder(layer, num_layers=layers, enable_nested_tensor=False)
 
     def forward(self, batch: TaskBatch) -> BaselineOutput:
+        encoded = self.encode_representation(batch)
+        return self.io.decode(encoded, _task_id(batch))
+
+    def encode_representation(self, batch: TaskBatch) -> Tensor:
+        """Return the position-aware causal representation for registered analysis."""
+
         batch.validate()
-        task_id = _task_id(batch)
         length = batch.sequence_length
         causal = torch.triu(
             torch.ones((length, length), dtype=torch.bool, device=batch.inputs.device),
@@ -138,7 +148,7 @@ class SharedTransformerBaseline(nn.Module):
             length, self.hidden_size, device=batch.inputs.device
         ).to(encoded.dtype)
         encoded = self.backbone(encoded, mask=causal, src_key_padding_mask=~batch.valid_mask)
-        return self.io.decode(encoded, task_id)
+        return cast(Tensor, encoded)
 
 
 class SingleTaskTransformerV2(TransformerBaseline):
@@ -147,6 +157,13 @@ class SingleTaskTransformerV2(TransformerBaseline):
     model_id = "transformer-monolithic-v2"
 
     def forward(self, inputs: Tensor, valid_mask: Tensor) -> BaselineOutput:
+        encoded = self.encode_representation(inputs, valid_mask)
+        next_state = None if self.next_state_head is None else self.next_state_head(encoded)
+        return BaselineOutput(logits=self.output_head(encoded), next_state_logits=next_state)
+
+    def encode_representation(self, inputs: Tensor, valid_mask: Tensor) -> Tensor:
+        """Return the exact Transformer-v2 hidden sequence used by task heads."""
+
         if inputs.ndim != 3 or valid_mask.shape != inputs.shape[:2]:
             raise ValueError("invalid baseline input or mask shape")
         length = inputs.shape[1]
@@ -158,8 +175,7 @@ class SingleTaskTransformerV2(TransformerBaseline):
             encoded.dtype
         )
         encoded = self.encoder(encoded, mask=causal, src_key_padding_mask=~valid_mask)
-        next_state = None if self.next_state_head is None else self.next_state_head(encoded)
-        return BaselineOutput(logits=self.output_head(encoded), next_state_logits=next_state)
+        return cast(Tensor, encoded)
 
 
 @dataclass(frozen=True, slots=True)
