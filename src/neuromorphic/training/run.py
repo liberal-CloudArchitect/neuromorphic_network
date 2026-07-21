@@ -1,4 +1,4 @@
-"""Command-line entry point for P1 baselines and P2 modular suites."""
+"""Command-line entry point for P1 baselines and P2--P4 experiment suites."""
 
 from __future__ import annotations
 
@@ -222,6 +222,11 @@ def main(arguments: list[str] | None = None) -> int:
             from neuromorphic.training.p3_suite import execute_p3_suite
 
             result = execute_p3_suite(load_p3_suite_config(parsed.config))
+        elif isinstance(raw_config, dict) and raw_config.get("schema_version") == "p4-suite-v1":
+            from neuromorphic.training.p4_config import load_p4_suite_config
+            from neuromorphic.training.p4_suite import execute_p4_suite
+
+            result = execute_p4_suite(load_p4_suite_config(parsed.config))
         else:
             result = execute(load_run_config(parsed.config))
     except FloatingPointError as error:
@@ -238,7 +243,10 @@ def main(arguments: list[str] | None = None) -> int:
         "qualification_failed",
         "pilot_failed",
         "completed_with_failures",
+        "mechanism_failed",
+        "full_failed",
         "resource_limit",
+        "stopped",
     }:
         return 5
     return 0

@@ -8,7 +8,12 @@ from typing import cast
 from torch import nn
 
 from neuromorphic.core.contracts import BrainModule
-from neuromorphic.core.registry import MODULE_IDS, OPTIONAL_EXPERT_IDS, REQUIRED_PATH_IDS
+from neuromorphic.core.registry import (
+    ALL_MODULE_IDS,
+    MODULE_IDS,
+    OPTIONAL_EXPERT_IDS,
+    REQUIRED_PATH_IDS,
+)
 
 
 class ModuleRegistry(nn.Module):
@@ -31,7 +36,7 @@ class ModuleRegistry(nn.Module):
         """Register one PyTorch implementation under its frozen ``module_id``."""
 
         module_id = module.module_id
-        if module_id not in MODULE_IDS:
+        if module_id not in ALL_MODULE_IDS:
             raise ValueError(f"unregistered module identifier: {module_id}")
         if module_id in self._index_by_id:
             raise ValueError(f"duplicate module identifier: {module_id}")
@@ -55,7 +60,7 @@ class ModuleRegistry(nn.Module):
     def ids(self) -> tuple[str, ...]:
         """Return registered IDs in the frozen global order, not insertion order."""
 
-        return tuple(module_id for module_id in MODULE_IDS if module_id in self._index_by_id)
+        return tuple(module_id for module_id in ALL_MODULE_IDS if module_id in self._index_by_id)
 
     @property
     def required_ids(self) -> tuple[str, ...]:
@@ -67,10 +72,13 @@ class ModuleRegistry(nn.Module):
             module_id for module_id in OPTIONAL_EXPERT_IDS if module_id in self._index_by_id
         )
 
-    def require_complete(self) -> None:
+    def require_complete(self, module_ids: tuple[str, ...] = MODULE_IDS) -> None:
         """Reject a registry that cannot execute the frozen six-module graph."""
 
-        missing = tuple(module_id for module_id in MODULE_IDS if module_id not in self._index_by_id)
+        unknown = set(module_ids).difference(ALL_MODULE_IDS)
+        if unknown:
+            raise ValueError(f"unknown required module identifiers: {sorted(unknown)}")
+        missing = tuple(module_id for module_id in module_ids if module_id not in self._index_by_id)
         if missing:
             raise ValueError(f"module registry is incomplete; missing: {missing}")
 

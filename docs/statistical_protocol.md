@@ -50,6 +50,15 @@ strata 冻结为：Associative Recall 的 pair-count × interference-count bucke
 - P3 因果 family 固定为 episodic、working、predictive 三项 retrained contrasts。
 - paired bootstrap 必须先按 model/variant、seed、task、distribution、sample index 和 stratum 严格对齐；不允许把两个模型的样本独立重采样。
 
+### P4 protocol-v1 补充
+
+- AR chance 固定为 `1/32`，DRS chance 固定为 `1/2`。SmallGraph chance 对每张图在相同 rollout horizon 下用均匀随机合法动作策略的精确动态规划计算。
+- ID task score 先逐样本 chance-normalize，再对三任务等权；OOD 使用 `(OOD-chance)/(ID-chance)`，SmallGraph 的 scale/topology/joint 三个 OOD 均执行 live rollout。
+- 网络总体比较仍以 shared GRU 与 shared Transformer 为双主基线：ID/OOD 相对两者均提高至少 5%，AULC 至少 15%，forgetting 满足 `baseline−modular ≥0.02` 且相对两者均通过。
+- 预测因果主检验为 full 对同 seed retrained predictor-off：三任务 macro AULC 至少提高 5%，且任一任务最终分数下降不超过 2pp。预测质量要求 forecast error 相对 persistence 至少降低 5%，至少两项任务方向为正。
+- 稀疏路由相对 dense-memory：optional MAC 至少下降 20%，各任务下降不超过 2pp，drops 为 0，AR store/query episodic coverage 为 100%。
+- 正式 seeds、bootstrap 次数、RNG、CI 与 Holm 规则保持 `[17,29,43]`、10,000、`20260715`、95% 和 `p_adj≤0.05`。qualification 的 200 次 bootstrap 只验证程序。
+
 ## 多重比较
 
 - confirmatory family 由同一 Gate 中所有“模型优于主基线”的主指标比较组成；在查看结果前固定 family。

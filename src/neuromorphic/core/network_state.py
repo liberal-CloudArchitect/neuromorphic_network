@@ -14,7 +14,7 @@ from neuromorphic.core.contracts import (
     validate_module_state,
 )
 from neuromorphic.core.module_registry import ModuleRegistry
-from neuromorphic.core.registry import MODULE_IDS
+from neuromorphic.core.registry import ALL_MODULE_IDS
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,7 +31,7 @@ class NetworkState:
             raise TypeError("valid_step_counts must use torch.long")
         if not internal_execution_is_trusted() and torch.any(self.valid_step_counts < 0).item():
             raise ValueError("valid_step_counts must be non-negative")
-        unknown = set(self.module_states).difference(MODULE_IDS)
+        unknown = set(self.module_states).difference(ALL_MODULE_IDS)
         if unknown:
             raise ValueError(f"network state contains unknown owners: {sorted(unknown)}")
         for module_id, state in self.module_states.items():

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neuromorphic.invalid/schemas/p4-suite-registry-v1.json",
+  "title": "P4 suite registry v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "run_id",
+    "profile",
+    "qualification_only",
+    "protocol_version",
+    "protocol_hash",
+    "config_hash",
+    "matrix_hash",
+    "status",
+    "cells"
+  ],
+  "properties": {
+    "schema_version": {"const": "p4-suite-registry-v1"},
+    "run_id": {"type": "string", "minLength": 1},
+    "profile": {"enum": ["qualification", "pilot", "mechanism", "full"]},
+    "qualification_only": {"type": "boolean"},
+    "protocol_version": {"const": "p4-protocol-v1"},
+    "protocol_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "config_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "matrix_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "status": {"type": "string", "minLength": 1},
+    "cells": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "schema_version",
+          "cell_id",
+          "cell_type",
+          "regime",
+          "model_id",
+          "variant_id",
+          "seed",
+          "max_steps",
+          "mandatory",
+          "intervention",
+          "status",
+          "attempts"
+        ],
+        "properties": {
+          "schema_version": {"const": "p4-experiment-v1"},
+          "cell_id": {"type": "string", "minLength": 1},
+          "status": {
+            "enum": ["PENDING", "RUNNING", "COMPLETED", "FAILED", "INVALID", "RESOURCE_LIMIT"]
+          },
+          "artifact_dir": {"type": ["string", "null"]},
+          "error": {"type": ["object", "null"]},
+          "attempts": {"type": "array"}
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+    }
+  }
+}

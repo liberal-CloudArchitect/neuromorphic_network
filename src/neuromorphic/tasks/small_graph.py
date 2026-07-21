@@ -11,6 +11,7 @@ from torch import Tensor
 
 from neuromorphic.tasks.base import (
     CPU_DEVICE,
+    P4_SPLIT_SEEDS,
     SPLIT_SEEDS,
     DatasetSplit,
     TaskBatch,
@@ -54,21 +55,33 @@ class SmallGraphTask:
     input_dim = 356
     num_classes = 4
 
-    def __init__(self, *, profile: str = "smoke", distribution: str = "v1") -> None:
+    def __init__(
+        self, *, profile: str = "smoke", distribution: str = "v1", namespace: str = "legacy"
+    ) -> None:
         if distribution not in {"v1", "scale", "topology", "joint"}:
             raise ValueError(f"unknown small-graph distribution: {distribution}")
         self.profile = profile
         self.distribution = distribution
+        if namespace not in {"legacy", "p4"}:
+            raise ValueError(f"unknown task namespace: {namespace}")
+        self.namespace = namespace
+        self.split_seeds = P4_SPLIT_SEEDS if namespace == "p4" else SPLIT_SEEDS
         self.task_version = (
             "small-graph-v1" if distribution == "v1" else f"small-graph-p3-{distribution}-v1"
         )
+        if namespace == "p4":
+            self.task_version = (
+                "small-graph-p4-v1" if distribution == "v1" else f"small-graph-p4-{distribution}-v1"
+            )
 
     @staticmethod
     def _randint(generator: torch.Generator, low: int, high: int) -> int:
         return int(torch.randint(low, high, (), generator=generator).item())
 
     def _make_graph(self, split: DatasetSplit, sample_index: int) -> _Graph:
-        generator = make_generator(self.task_version, split, sample_index)
+        generator = make_generator(
+            self.task_version, split, sample_index, split_seeds=self.split_seeds
+        )
         if split == "ood":
             node_count = (
                 self._randint(generator, 11, 17)
@@ -280,7 +293,10 @@ class SmallGraphTask:
             valid_mask[batch_index, :steps] = True
             loss_mask[batch_index, :steps] = sample.loss_mask
             episode_ids[batch_index, :steps] = deterministic_seed(
-                self.task_version, split, sample_index
+                self.task_version,
+                split,
+                sample_index,
+                split_seeds=self.split_seeds,
             )
             optimal_action_mask[batch_index, :steps] = sample.optimal_action_mask
             next_state[batch_index, :steps] = sample.next_state
@@ -303,8 +319,9 @@ class SmallGraphTask:
             metadata={
                 "task_id": self.task_id,
                 "task_version": self.task_version,
+                "namespace": self.namespace,
                 "split": split,
-                "split_seed": SPLIT_SEEDS[split],
+                "split_seed": self.split_seeds[split],
                 "sample_indices": tuple(sample_indices),
                 "content_hashes": tuple(hashes),
                 "sequence_lengths": tuple(lengths),

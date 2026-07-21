@@ -122,3 +122,12 @@ last_updated: 2026-07-15
 - `RESULT-P3-GATE-002`：`GATE-NN-MVP FAILED`，不生成正式 bundle，不授予网络 MVP 标签。
 
 这些结果只评价当前人工模型和冻结合成任务。情景记忆与工作记忆的任务内支持不提高神经科学来源评级，也不能表述为真实脑区机制验证。
+
+## P4 协议与工程证据索引
+
+- `PROTO-P4-001`：`p4-protocol-v1` 冻结 P3 缺失的 chance-normalized ID/OOD、SmallGraph 随机策略 DP、AULC、forgetting、预测质量/因果和稀疏非劣性口径；不追溯修改 P3。
+- `ARCH-P4-PRED-001`：`predictive_adapter.v2` 只消费上一有效 transition 的 forecast，以 stop-gradient 当前感觉表示为目标，并将最大幅度 `0.25` 的误差反馈用于下一步行为路径。
+- `ARCH-P4-ROUTE-001`：`sparse_router.v2` 只在 episodic/working 状态专家中 top-1；AR store/query 语义保留 episodic，任一专家容量可覆盖全部有效 token，predictor 改为必经路径。
+- `QUAL-P4-CPU-001`：dirty-worktree 工程运行 `p4-qualification-20260721T082948Z` 完成 8/8 cells、4 个 checkpoint-v4、4,864 条样本记录和 34 个校验和；该记录仅证明 CPU 路径，不关闭 `GATE-4-QUAL`。
+
+P4 的 MPS clean-SHA qualification、远程 CPU CI、pilot、正式机制与完整矩阵必须在对应报告中另行登记。当前不得授予 network-mvp-v2 标签。

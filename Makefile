@@ -1,4 +1,4 @@
-.PHONY: env env-update lint format-check typecheck test smoke smoke-mps gate0 smoke-p1 smoke-p2-ci smoke-p2-mps smoke-p3-ci qualify-p3-mps p3-full-start p3-full-status p3-full-logs p3-full-resume p3-full-stop p3-full-verify check
+.PHONY: env env-update lint format-check typecheck test smoke smoke-mps gate0 smoke-p1 smoke-p2-ci smoke-p2-mps smoke-p3-ci qualify-p3-mps smoke-p4-ci qualify-p4-mps p3-full-start p3-full-status p3-full-logs p3-full-resume p3-full-stop p3-full-verify p4-start p4-status p4-logs p4-resume p4-stop p4-verify p4-record-ci check
 
 CONDA_ENV := brain
 CONDA_RUN := conda run --no-capture-output -n $(CONDA_ENV)
@@ -49,6 +49,12 @@ smoke-p3-ci:
 qualify-p3-mps:
 	$(CONDA_RUN) python -m neuromorphic.training.run --config configs/experiments/p3/qualification.yaml
 
+smoke-p4-ci:
+	$(CONDA_RUN) python -m neuromorphic.training.run --config configs/experiments/p4/ci.yaml
+
+qualify-p4-mps:
+	$(CONDA_RUN) python -m neuromorphic.training.run --config configs/experiments/p4/qualification.yaml
+
 p3-full-start:
 	./scripts/p3_full_run.sh start
 
@@ -66,5 +72,28 @@ p3-full-stop:
 
 p3-full-verify:
 	./scripts/p3_full_run.sh verify
+
+P4_PROFILE ?= qualification
+
+p4-start:
+	./scripts/p4_run.sh start $(P4_PROFILE)
+
+p4-status:
+	./scripts/p4_run.sh status
+
+p4-logs:
+	./scripts/p4_run.sh logs
+
+p4-resume:
+	./scripts/p4_run.sh resume
+
+p4-stop:
+	./scripts/p4_run.sh stop
+
+p4-verify:
+	./scripts/p4_run.sh verify
+
+p4-record-ci:
+	./scripts/p4_run.sh record-ci
 
 check: lint format-check typecheck test smoke

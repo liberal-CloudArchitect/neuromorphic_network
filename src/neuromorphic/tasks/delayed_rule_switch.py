@@ -11,6 +11,7 @@ from torch import Tensor
 
 from neuromorphic.tasks.base import (
     CPU_DEVICE,
+    P4_SPLIT_SEEDS,
     SPLIT_SEEDS,
     DatasetSplit,
     TaskBatch,
@@ -39,16 +40,28 @@ class DelayedRuleSwitchTask:
     num_classes = 2
     trial_count = 4
 
-    def __init__(self, *, profile: str = "smoke", distribution: str = "v1") -> None:
+    def __init__(
+        self, *, profile: str = "smoke", distribution: str = "v1", namespace: str = "legacy"
+    ) -> None:
         if distribution not in {"v1", "delay", "composition", "joint"}:
             raise ValueError(f"unknown delayed-rule distribution: {distribution}")
         self.profile = profile
         self.distribution = distribution
+        if namespace not in {"legacy", "p4"}:
+            raise ValueError(f"unknown task namespace: {namespace}")
+        self.namespace = namespace
+        self.split_seeds = P4_SPLIT_SEEDS if namespace == "p4" else SPLIT_SEEDS
         self.task_version = (
             "delayed-rule-switch-v1"
             if distribution == "v1"
             else f"delayed-rule-switch-p3-{distribution}-v1"
         )
+        if namespace == "p4":
+            self.task_version = (
+                "delayed-rule-switch-p4-v1"
+                if distribution == "v1"
+                else f"delayed-rule-switch-p4-{distribution}-v1"
+            )
 
     @staticmethod
     def _randint(generator: torch.Generator, low: int, high: int) -> int:
@@ -66,7 +79,9 @@ class DelayedRuleSwitchTask:
 
     @lru_cache(maxsize=32_768)  # noqa: B019 - bounded task instances live for one run
     def _make_sample(self, split: DatasetSplit, sample_index: int) -> _Sample:
-        generator = make_generator(self.task_version, split, sample_index)
+        generator = make_generator(
+            self.task_version, split, sample_index, split_seeds=self.split_seeds
+        )
         initial_rule = self._randint(generator, 0, 4)
         switch_positions: tuple[int, ...]
         if split == "ood":
@@ -162,7 +177,10 @@ class DelayedRuleSwitchTask:
             valid_mask[batch_index, :steps] = True
             loss_mask[batch_index, :steps] = sample.loss_mask
             episode_ids[batch_index, :steps] = deterministic_seed(
-                self.task_version, split, sample_index
+                self.task_version,
+                split,
+                sample_index,
+                split_seeds=self.split_seeds,
             )
             hashes.append(self.content_hash(split, sample_index))
             lengths.append(steps)
@@ -179,8 +197,9 @@ class DelayedRuleSwitchTask:
             metadata={
                 "task_id": self.task_id,
                 "task_version": self.task_version,
+                "namespace": self.namespace,
                 "split": split,
-                "split_seed": SPLIT_SEEDS[split],
+                "split_seed": self.split_seeds[split],
                 "sample_indices": tuple(sample_indices),
                 "content_hashes": tuple(hashes),
                 "sequence_lengths": tuple(lengths),

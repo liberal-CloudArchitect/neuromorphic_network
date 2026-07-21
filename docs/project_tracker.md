@@ -6,7 +6,7 @@ last_updated: 2026-07-21
 
 # 项目实施追踪台账
 
-状态口径：`DONE` 表示已有可复核证据；`IN_PROGRESS` 表示实现已落盘但尚未通过阶段 Gate；`NOT_STARTED` 表示尚未开始。P2 项目在 `GATE-2` 独立裁决前一律不计为完成。
+状态口径：`DONE` 表示已有可复核证据；`IN_PROGRESS` 表示实现已落盘但尚未通过对应 Gate；`NOT_STARTED` 表示尚未开始。qualification 通过只关闭工程资格项，不关闭正式科学 Gate。
 
 ## 阶段状态
 
@@ -16,6 +16,7 @@ last_updated: 2026-07-21
 | P1 任务基线与训练骨架 | DONE | GATE-1 PASSED | 三任务、单体基线、恢复与统计已冻结 |
 | P2 模块化类脑网络 | DONE | GATE-2 PASSED | 完整 MPS suite、独立 verifier 与远程 CPU CI 均通过 |
 | P3 因果、泛化与网络 MVP | DONE | GATE-3 PASSED / GATE-NN-MVP FAILED | 科研矩阵完整；当前网络未取得 MVP 资格 |
+| P4 预测闭环与语义稀疏路由 | IN_PROGRESS | GATE-4-QUAL 待 clean-SHA 裁决 | 工程实现与 CPU 资格路径完成；正式科学矩阵未运行 |
 
 ## P2 工作项
 
@@ -54,6 +55,7 @@ last_updated: 2026-07-21
 |---|---|---|
 | ADR-004 | P2 采用六个版本化人工模块、step 级 top-2 稀疏执行及 checkpoint-v2；3D 仅是后续展示层 | ACCEPTED（GATE-2） |
 | ADR-005 | P3 拆分科研完整性 GATE-3 与科学收益 GATE-NN-MVP，并采用可恢复后台矩阵 | ACCEPTED（GATE-3） |
+| ADR-006 | P4 将预测器移入跨步必经闭环，状态专家采用语义保留 top-1 路由，并隔离新协议结果 | ACCEPTED（protocol freeze） |
 
 ## P3 工作项
 
@@ -69,3 +71,23 @@ last_updated: 2026-07-21
 | P3-08 | 正式三 seed 后台矩阵 | DONE | `p3-full-dc6c259c-20260719T034230Z`，81/81 complete |
 | P3-09 | GATE-3 独立评审 | DONE | `reports/gates/GATE-3.md`：PASSED |
 | P3-10 | GATE-NN-MVP 独立评审 | DONE | `reports/gates/GATE-NN-MVP.md`：FAILED；0/2 收益类别，predictive 因果失败 |
+
+## P4 工作项
+
+| ID | 工作项 | 状态 | 当前证据 |
+|---|---|---|---|
+| P4-01 | 冻结 protocol-v1、CR-003、ADR-006 与缺失指标 | DONE | `docs/p4_implementation_spec.md`、`docs/change_requests/CR-003.md`、`docs/decisions/ADR-006.md` |
+| P4-02 | 建立 P4 task versions 与独立 split seed 空间 | DONE | namespace `p4`、split/hash 隔离测试 |
+| P4-03 | 实现 `predictive_adapter.v2` 跨步预测、stop-gradient 与有界反馈 | DONE | 状态/时序/梯度/泄漏单测 |
+| P4-04 | 实现语义保留 top-1 路由及 dense/legacy 控制 | DONE | reservation、tie-break、zero-drop、真实调用测试 |
+| P4-05 | 实现 `modular-brain-v2`、telemetry-v2 与成本统计 | DONE | 三任务前后向、数值等价、schema 与 MAC 测试 |
+| P4-06 | 实现 checkpoint-v4 与 v1～v3 回归兼容 | DONE | pending forecast、31→32、损坏拒绝与恢复测试 |
+| P4-07 | 实现 chance/OOD/AULC/forgetting 与严格配对统计 | DONE | SmallGraph DP、非法输入和 bootstrap fixture |
+| P4-08 | 实现 qualification/pilot/mechanism/full registry | DONE | 8/4/24/81 cell 配置与完整性测试 |
+| P4-09 | 实现后台 start/status/logs/resume/stop/verify 和阶段锁 | DONE | 控制器单测、clean SHA/CI/MPS/电源/磁盘预检 |
+| P4-10 | CPU/MPS qualification 与独立 GATE-4-QUAL | IN_PROGRESS | CPU 8/8 已通过；等待 clean SHA 的 MPS 与远程 CI |
+| P4-11 | 冻结 pilot 选择 | NOT_STARTED | 必须先通过 GATE-4-QUAL |
+| P4-12 | 三 seed 24-cell 机制矩阵与 GATE-4-MECH | NOT_STARTED | 不允许用 qualification 替代 |
+| P4-13 | 81-cell 正式矩阵与 GATE-4 | NOT_STARTED | 仅机制 Gate 通过后启动 |
+| P4-14 | GATE-NN-MVP-v2 与可选 network-mvp-v2 bundle | NOT_STARTED | 只有科学 Gate 通过才生成 bundle |
+| P4-15 | 版本升级 0.5.0 | NOT_STARTED | 仅 GATE-4 PASSED 后执行 |

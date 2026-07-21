@@ -1,0 +1,37 @@
+schema_version: p4-suite-v1
+protocol_version: p4-protocol-v1
+profile: mechanism
+qualification_only: false
+device: mps
+output_root: artifacts/runs
+control_root: artifacts/p4/control
+seeds: [17, 29, 43]
+data:
+  train: 8192
+  validation: 2048
+  analysis: 512
+  test: 2048
+  ood: 2048
+budget:
+  batch_size: 64
+  shared_steps_per_task: 5000
+  per_task_steps: 5000
+  continual_steps_per_stage: 1500
+  validation_interval: 100
+  checkpoint_interval: 100
+  patience: 10
+  min_delta: 0.001
+  wall_clock_hours: 24
+  bootstrap_samples: 10000
+optimizer:
+  learning_rate: 0.0003
+  weight_decay: 0.01
+  temporal_loss_weight: 0.05
+  gradient_clip_norm: 1.0
+task_order:
+  - associative_recall.v1
+  - delayed_rule_switch.v1
+  - small_graph.v1
+selected_preset: preset-2
+qualification_report: artifacts/p4/qualification-lock.json
+pilot_lock: artifacts/p4/pilot-lock.json

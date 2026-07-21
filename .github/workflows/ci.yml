@@ -12,7 +12,7 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     defaults:
       run:
         shell: bash -el {0}
@@ -59,3 +59,6 @@ jobs:
 
       - name: P3 qualification CPU matrix
         run: make smoke-p3-ci
+
+      - name: P4 causal-routing CPU qualification
+        run: make smoke-p4-ci

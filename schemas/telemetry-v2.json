@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neuromorphic.local/schemas/telemetry-v2.json",
+  "title": "Neuromorphic artificial module telemetry v2",
+  "description": "P4 detached aggregate telemetry for artificial recurrent prediction and semantic routing. Raw tensors, anatomical atlas fields, web fields, and viewer fields are forbidden.",
+  "x-status": "ACCEPTED",
+  "x-scientific-disclaimer": "Artificial computational abstraction telemetry; not biological neural activity, brain tissue, BOLD, or a clinical measurement.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scientific_disclaimer",
+    "event_id",
+    "run_id",
+    "global_step",
+    "task",
+    "event_type",
+    "phase",
+    "module_id",
+    "compute_gate",
+    "reserved_count",
+    "learned_count",
+    "raw_count",
+    "executed_count",
+    "capacity",
+    "drop_count",
+    "reserved_coverage",
+    "forecast_coverage",
+    "forecast_error",
+    "persistence_error",
+    "active_mac",
+    "dense_mac",
+    "metadata"
+  ],
+  "properties": {
+    "schema_version": {"const": "telemetry-v2"},
+    "scientific_disclaimer": {"const": "Artificial computational abstraction telemetry; not biological neural activity, brain tissue, BOLD, or a clinical measurement."},
+    "event_id": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "global_step": {"type": "integer", "minimum": 0},
+    "task": {"type": "string", "minLength": 1},
+    "event_type": {"enum": ["compute", "predict", "route", "summary"]},
+    "phase": {"enum": ["train", "evaluate", "generate", "replay"]},
+    "module_id": {
+      "enum": [
+        "sensory_encoder.v1",
+        "episodic_memory.v1",
+        "working_memory.v1",
+        "predictive_adapter.v1",
+        "predictive_adapter.v2",
+        "action_selector.v1",
+        "sparse_router.v1",
+        "sparse_router.v2"
+      ]
+    },
+    "compute_gate": {"type": "boolean"},
+    "reserved_count": {"type": ["integer", "null"], "minimum": 0},
+    "learned_count": {"type": ["integer", "null"], "minimum": 0},
+    "raw_count": {"type": ["integer", "null"], "minimum": 0},
+    "executed_count": {"type": ["integer", "null"], "minimum": 0},
+    "capacity": {"type": ["integer", "null"], "minimum": 0},
+    "drop_count": {"type": ["integer", "null"], "minimum": 0},
+    "reserved_coverage": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "forecast_coverage": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "forecast_error": {"type": ["number", "null"], "minimum": 0},
+    "persistence_error": {"type": ["number", "null"], "minimum": 0},
+    "active_mac": {"type": ["number", "null"], "minimum": 0},
+    "dense_mac": {"type": ["number", "null"], "minimum": 0},
+    "metadata": {
+      "type": "object",
+      "description": "At most 32 detached bounded scalar values; tensors, arrays, nested objects, atlas, web, and viewer fields are forbidden.",
+      "propertyNames": {"pattern": "^(?!.*(?:atlas|web|viewer)).+$"},
+      "additionalProperties": {
+        "oneOf": [
+          {"type": "string", "maxLength": 256},
+          {"type": "number", "minimum": -1000000000000, "maximum": 1000000000000},
+          {"type": "boolean"},
+          {"type": "null"}
+        ]
+      },
+      "maxProperties": 32
+    }
+  }
+}

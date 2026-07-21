@@ -1,0 +1,34 @@
+schema_version: p4-suite-v1
+protocol_version: p4-protocol-v1
+profile: qualification
+qualification_only: true
+device: cpu
+output_root: artifacts/runs
+control_root: artifacts/p4/control
+seeds: [7]
+data:
+  train: 64
+  validation: 32
+  analysis: 32
+  test: 32
+  ood: 32
+budget:
+  batch_size: 8
+  shared_steps_per_task: 4
+  per_task_steps: 4
+  continual_steps_per_stage: 2
+  validation_interval: 2
+  checkpoint_interval: 2
+  patience: 10
+  min_delta: 0.001
+  wall_clock_hours: 2
+  bootstrap_samples: 200
+optimizer:
+  learning_rate: 0.0003
+  weight_decay: 0.01
+  temporal_loss_weight: 0.05
+  gradient_clip_norm: 1.0
+task_order:
+  - associative_recall.v1
+  - delayed_rule_switch.v1
+  - small_graph.v1

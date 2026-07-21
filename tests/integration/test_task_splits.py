@@ -45,6 +45,17 @@ def test_splits_have_distinct_episode_ids_and_content() -> None:
                 assert episode_ids[left].isdisjoint(episode_ids[right])
 
 
+def test_p4_namespace_has_fresh_versions_and_split_seeds() -> None:
+    for task_id in TASK_IDS:
+        legacy = create_task(task_id)
+        p4 = create_task(task_id, namespace="p4")
+        legacy_batch = legacy.generate("test", [0])
+        p4_batch = p4.generate("test", [0])
+        assert "-p4-" in p4.task_version
+        assert p4_batch.metadata["split_seed"] == 13_301
+        assert legacy_batch.metadata["content_hashes"] != p4_batch.metadata["content_hashes"]
+
+
 def test_delayed_switch_profile_matches_the_frozen_protocol() -> None:
     profile = yaml.safe_load(Path("configs/tasks/profiles.yaml").read_text(encoding="utf-8"))
     specification = profile["tasks"]["delayed_rule_switch.v1"]

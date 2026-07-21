@@ -24,20 +24,42 @@ SPLIT_SEEDS: Mapping[DatasetSplit, int] = {
     "ood": 4_401,
 }
 
+P4_SPLIT_SEEDS: Mapping[DatasetSplit, int] = {
+    "train": 11_101,
+    "validation": 12_201,
+    "test": 13_301,
+    "ood": 14_401,
+    "analysis": 15_501,
+}
 
-def deterministic_seed(task_version: str, split: DatasetSplit, sample_index: int) -> int:
+
+def deterministic_seed(
+    task_version: str,
+    split: DatasetSplit,
+    sample_index: int,
+    *,
+    split_seeds: Mapping[DatasetSplit, int] = SPLIT_SEEDS,
+) -> int:
     """Return a stable torch seed independent of process RNG state."""
-    if split not in SPLIT_SEEDS:
+    if split not in split_seeds:
         raise ValueError(f"unknown dataset split: {split}")
     if sample_index < 0:
         raise ValueError("sample_index must be non-negative")
-    material = f"{task_version}:{SPLIT_SEEDS[split]}:{sample_index}".encode()
+    material = f"{task_version}:{split_seeds[split]}:{sample_index}".encode()
     return int.from_bytes(sha256(material).digest()[:8], "big") % (2**63 - 1)
 
 
-def make_generator(task_version: str, split: DatasetSplit, sample_index: int) -> torch.Generator:
+def make_generator(
+    task_version: str,
+    split: DatasetSplit,
+    sample_index: int,
+    *,
+    split_seeds: Mapping[DatasetSplit, int] = SPLIT_SEEDS,
+) -> torch.Generator:
     generator = torch.Generator(device="cpu")
-    generator.manual_seed(deterministic_seed(task_version, split, sample_index))
+    generator.manual_seed(
+        deterministic_seed(task_version, split, sample_index, split_seeds=split_seeds)
+    )
     return generator
 
 

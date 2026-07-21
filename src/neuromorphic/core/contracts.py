@@ -16,7 +16,7 @@ from typing import Literal, Protocol, runtime_checkable
 import torch
 from torch import Tensor
 
-from neuromorphic.core.registry import MODULE_IDS
+from neuromorphic.core.registry import ALL_MODULE_IDS
 
 type Phase = Literal["train", "evaluate", "generate", "replay"]
 type MetadataScalar = str | int | float | bool | None
@@ -120,7 +120,7 @@ def validate_brain_packet(packet: BrainPacket) -> None:
 
     _require_nonempty(packet.modality, "modality")
     _require_nonempty(packet.source_module, "source_module")
-    if packet.source_module not in MODULE_IDS:
+    if packet.source_module not in ALL_MODULE_IDS:
         raise ValueError(f"source_module is not registered: {packet.source_module}")
 
     if packet.goal_context is not None:
@@ -177,7 +177,7 @@ def validate_module_context(
         raise ValueError("reset_mask and BrainPacket must share a device")
     if len(set(context.eligible_modules)) != len(context.eligible_modules):
         raise ValueError("eligible_modules must not contain duplicates")
-    unknown = set(context.eligible_modules).difference(MODULE_IDS)
+    unknown = set(context.eligible_modules).difference(ALL_MODULE_IDS)
     if unknown:
         raise ValueError(f"eligible_modules contains unregistered identifiers: {sorted(unknown)}")
 
@@ -201,7 +201,7 @@ def validate_module_state(
 ) -> None:
     """Validate ownership, version, tensor names, and optional device placement."""
 
-    if state.module_id not in MODULE_IDS:
+    if state.module_id not in ALL_MODULE_IDS:
         raise ValueError(f"unregistered module state owner: {state.module_id}")
     _require_nonempty(state.version, "version")
     for name, tensor in state.tensors.items():

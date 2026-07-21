@@ -10,6 +10,7 @@ from neuromorphic.tasks.delayed_rule_switch import DelayedRuleSwitchTask
 from neuromorphic.tasks.small_graph import SmallGraphTask
 
 type TaskProfile = Literal["smoke", "qualification"]
+type TaskNamespace = Literal["legacy", "p4"]
 
 _TASKS: dict[str, type[AssociativeRecallTask | DelayedRuleSwitchTask | SmallGraphTask]] = {
     AssociativeRecallTask.task_id: AssociativeRecallTask,
@@ -19,7 +20,11 @@ _TASKS: dict[str, type[AssociativeRecallTask | DelayedRuleSwitchTask | SmallGrap
 
 
 def create_task(
-    task_id: str, *, profile: TaskProfile = "smoke", distribution: str = "v1"
+    task_id: str,
+    *,
+    profile: TaskProfile = "smoke",
+    distribution: str = "v1",
+    namespace: TaskNamespace = "legacy",
 ) -> SequenceTask:
     """Create a task; profiles select run budgets, never sample content."""
     if profile not in ("smoke", "qualification"):
@@ -29,4 +34,4 @@ def create_task(
     except KeyError as error:
         known = ", ".join(sorted(_TASKS))
         raise ValueError(f"unknown task_id {task_id!r}; expected one of: {known}") from error
-    return task_type(profile=profile, distribution=distribution)
+    return task_type(profile=profile, distribution=distribution, namespace=namespace)
