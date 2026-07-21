@@ -127,6 +127,7 @@ def test_registry_is_atomic_complete_verifiable_and_resume_skips_completed(
 ) -> None:
     calls: list[str] = []
     _patch_fast_execution(monkeypatch, calls)
+    monkeypatch.setattr(p4_suite, "_repository_state", lambda: ("clean-sha", False))
     config = _config(tmp_path)
 
     result = p4_suite.run_p4_suite(config)
@@ -148,6 +149,7 @@ def test_registry_is_atomic_complete_verifiable_and_resume_skips_completed(
     verification = p4_suite.verify_p4_run(directory)
     assert verification["missing_cells"] == []
     assert verification["checksums_ok"] is True
+    assert not (tmp_path / "control/qualification-lock.json").exists()
     before = list(calls)
     resumed = p4_suite.run_p4_suite(config)
     assert resumed["completed_cells"] == 8

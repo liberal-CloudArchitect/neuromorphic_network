@@ -1286,6 +1286,11 @@ def _repository_relative(path: Path) -> str:
     return path.resolve().relative_to(root.resolve()).as_posix()
 
 
+def _is_repository_path(path: Path) -> bool:
+    root = Path(__file__).resolve().parents[3]
+    return path.resolve().is_relative_to(root.resolve())
+
+
 def _write_external_lock(path: Path, value: Mapping[str, object], *, dirty: bool) -> None:
     if dirty:
         return
@@ -1557,7 +1562,11 @@ def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
         report["registry_checksum_basis"] = "canonical registry without artifacts"
         report["registry_checksum"] = _canonical_sha256(cast(Mapping[str, object], registry))
         _write_json(report_path, report)
-        if registry["status"] == "qualification_passed" and not dirty:
+        if (
+            registry["status"] == "qualification_passed"
+            and not dirty
+            and _is_repository_path(report_path)
+        ):
             _write_external_lock(
                 config.control_root.parent / "qualification-lock.json",
                 {
@@ -1575,7 +1584,7 @@ def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
         selection = _write_pilot_lock(config, directory, git_commit=commit, git_dirty=dirty)
         registry["pilot_selection"] = selection
         selection_path = directory / "pilot-selection.json"
-        if not dirty:
+        if not dirty and _is_repository_path(selection_path):
             _write_external_lock(
                 config.control_root.parent / "pilot-lock.json",
                 {
