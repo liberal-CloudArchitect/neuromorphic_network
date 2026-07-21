@@ -80,6 +80,44 @@ def test_status_uses_cumulative_heartbeat_after_resume(
     assert result["remaining_wall_clock_seconds"] == pytest.approx(7_080.0)
 
 
+def test_status_stops_elapsed_clock_after_completed_process(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(control, "ROOT", tmp_path)
+    current_path = tmp_path / "artifacts/p3/control/current.json"
+    monkeypatch.setattr(control, "CURRENT", current_path)
+    runtime = tmp_path / "artifacts/p3/control/run/full.runtime.yaml"
+    raw = yaml.safe_load(Path("configs/experiments/p3/ci.yaml").read_text(encoding="utf-8"))
+    runtime.parent.mkdir(parents=True)
+    runtime.write_text(yaml.safe_dump(raw), encoding="utf-8")
+    artifact_directory = tmp_path / "artifacts/runs/run"
+    _write_json(
+        artifact_directory / "registry.json",
+        {"status": "completed", "cells": [], "wall_clock_seconds": 25.0},
+    )
+    _write_json(
+        artifact_directory / "heartbeat.json",
+        {"suite_elapsed_seconds": 20.0, "updated_at": datetime.now(UTC).isoformat()},
+    )
+    _write_json(
+        current_path,
+        {
+            "run_id": "run",
+            "pid": 987_654,
+            "started_at": (datetime.now(UTC) - timedelta(days=2)).isoformat(),
+            "prior_wall_clock_seconds": 0.0,
+            "runtime_config": str(runtime.relative_to(tmp_path)),
+            "artifact_dir": str(artifact_directory.relative_to(tmp_path)),
+        },
+    )
+    monkeypatch.setattr(control, "_alive", lambda pid: False)
+    monkeypatch.setattr(control, "_process_matches_launch", lambda current: False)
+
+    result = control.status()
+
+    assert result["elapsed_seconds"] == pytest.approx(25.0)
+
+
 def test_resume_rejects_a_completed_matrix(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(control, "ROOT", tmp_path)
     runtime = tmp_path / "runtime.yaml"
@@ -97,6 +135,15 @@ def test_resume_rejects_a_completed_matrix(tmp_path: Path, monkeypatch: pytest.M
     monkeypatch.setattr(control, "_preflight", lambda for_resume: ("abc", {}))
     monkeypatch.setattr(control, "_current", lambda: current)
     monkeypatch.setattr(control, "_alive", lambda pid: False)
+    monkeypatch.setattr(
+        control,
+        "_evidence_lock_hashes",
+        lambda: {
+            "qualification_lock_sha256": None,
+            "ci_lock_sha256": None,
+            "pilot_lock_sha256": None,
+        },
+    )
 
     with pytest.raises(RuntimeError, match="already complete"):
         control.resume()

@@ -300,17 +300,25 @@ def status() -> dict[str, Any]:
     current = _current()
     pid = int(current["pid"])
     result = dict(current)
-    result["process_alive"] = _alive(pid)
+    process_alive = _alive(pid)
+    result["process_alive"] = process_alive
     result["process_matches_launch"] = _process_matches_launch(current)
     started = datetime.fromisoformat(str(current["started_at"]))
     attempt_elapsed = max((datetime.now(UTC) - started).total_seconds(), 0.0)
-    elapsed = float(current.get("prior_wall_clock_seconds", 0.0)) + attempt_elapsed
+    prior_elapsed = float(current.get("prior_wall_clock_seconds", 0.0))
+    elapsed = prior_elapsed + attempt_elapsed if process_alive else prior_elapsed
     result["elapsed_seconds"] = elapsed
     registry = _under_root(current.get("artifact_dir"), label="artifact directory")
     registry = registry / "registry.json"
     if registry.is_file():
         value = _json(registry)
         cells = value.get("cells", [])
+        registry_elapsed = value.get("wall_clock_seconds")
+        if isinstance(registry_elapsed, (int, float)):
+            elapsed = (
+                max(elapsed, float(registry_elapsed)) if process_alive else float(registry_elapsed)
+            )
+            result["elapsed_seconds"] = elapsed
         result.update(
             {
                 "suite_status": value.get("status"),

@@ -110,3 +110,15 @@ last_updated: 2026-07-15
 - `QUAL-P2-GATE-001`：独立 `reports/gates/GATE-2.md` 裁决为 PASSED，接受 ADR-004 并允许升级 `neuromorphic 0.3.0`。
 
 上述条目是工程资格证据，不提升任何神经科学来源的证据等级，也不证明模块相对 P1 单体基线有科学收益；多种子比较、消融和否证留给 P3。
+
+## P3 正式结果索引
+
+- `RESULT-P3-FULL-001`：MPS 正式 run `p3-full-dc6c259c-20260719T034230Z`，源 commit `dc6c259c559eb3af6e4cc74c905cc2dfadf3690a`；81/81 cells、seeds `[17,29,43]`、49.16 小时、352 个 checksum 和 1,605,120 条逐样本记录完整。
+- `RESULT-P3-STAT-001`：`reports/p3/formal.json` 使用 10,000 次严格配对 bootstrap、RNG `20260715` 与 Holm 校正；隔离解释器复算逐字节一致。
+- `RESULT-P3-CAUSAL-001`：episodic query accuracy 效应 `+0.4212`、working response accuracy 效应 `+0.2083`，两项 CI 支持预期方向；predictive AULC 效应 `-0.0006`、CI 跨 0，预测适配因果假说被否证。
+- `RESULT-P3-NET-001`：模块化 AULC 相对 GRU 为 `+21.9%`，相对 Transformer 为 `-13.5%`；双主基线条件失败。
+- `RESULT-P3-SPARSE-001`：optional MAC 平均减少 `37.6%`，但 Associative Recall 相对 dense 下降 `10.4pp`，超过 `2pp` 非劣界。
+- `RESULT-P3-GATE-001`：`GATE-3 PASSED`，允许发布 `neuromorphic 0.4.0` 科研工具。
+- `RESULT-P3-GATE-002`：`GATE-NN-MVP FAILED`，不生成正式 bundle，不授予网络 MVP 标签。
+
+这些结果只评价当前人工模型和冻结合成任务。情景记忆与工作记忆的任务内支持不提高神经科学来源评级，也不能表述为真实脑区机制验证。

@@ -1,7 +1,7 @@
 ---
 title: 项目实施追踪台账
 status: ACTIVE
-last_updated: 2026-07-18
+last_updated: 2026-07-21
 ---
 
 # 项目实施追踪台账
@@ -15,7 +15,7 @@ last_updated: 2026-07-18
 | P0 科学假说与计算规格 | DONE | GATE-0 PASSED | 人工计算抽象，不作脑区等价声明 |
 | P1 任务基线与训练骨架 | DONE | GATE-1 PASSED | 三任务、单体基线、恢复与统计已冻结 |
 | P2 模块化类脑网络 | DONE | GATE-2 PASSED | 完整 MPS suite、独立 verifier 与远程 CPU CI 均通过 |
-| P3 因果、泛化与网络 MVP | IN_PROGRESS | GATE-3 PENDING / GATE-NN-MVP PENDING | 先完成 qualification，再由用户后台运行正式矩阵 |
+| P3 因果、泛化与网络 MVP | DONE | GATE-3 PASSED / GATE-NN-MVP FAILED | 科研矩阵完整；当前网络未取得 MVP 资格 |
 
 ## P2 工作项
 
@@ -53,7 +53,7 @@ last_updated: 2026-07-18
 | ID | 决策 | 状态 |
 |---|---|---|
 | ADR-004 | P2 采用六个版本化人工模块、step 级 top-2 稀疏执行及 checkpoint-v2；3D 仅是后续展示层 | ACCEPTED（GATE-2） |
-| ADR-005 | P3 拆分科研完整性 GATE-3 与科学收益 GATE-NN-MVP，并采用可恢复后台矩阵 | ACCEPTED（实施中） |
+| ADR-005 | P3 拆分科研完整性 GATE-3 与科学收益 GATE-NN-MVP，并采用可恢复后台矩阵 | ACCEPTED（GATE-3） |
 
 ## P3 工作项
 
@@ -62,10 +62,10 @@ last_updated: 2026-07-18
 | P3-01 | 冻结 protocol-v2、CR-002 与双 Gate | DONE | `docs/p3_implementation_spec.md`、`docs/change_requests/CR-002.md` |
 | P3-02 | P3 数据、shared 双主基线和 Transformer-v2 | DONE | 单元/集成测试与 39-cell CPU 小矩阵 |
 | P3-03 | 逐样本评估、AULC、严格配对统计 | DONE | strict pair fixture、Holm/AULC 测试 |
-| P3-04 | checkpoint-v3、suite registry 与可恢复矩阵 | IN_PROGRESS | sampler/RNG/shape/dtype 预验证、累计墙钟和安全恢复已通过 CPU/MPS 工程资格；待 clean SHA 冻结 |
-| P3-05 | 因果干预、顺序学习、表征和成本分析 | IN_PROGRESS | CPU/MPS dirty-worktree 资格均 39/39；正式结果待后台 run |
-| P3-06 | network-mvp-v1 bundle 与推理接口 | IN_PROGRESS | qualification fixture 可加载；仅科学 Gate 通过后发布正式 bundle |
-| P3-07 | CPU/MPS qualification、pilot 与后台管理脚本 | IN_PROGRESS | CPU/MPS 39/39 工程通过；clean SHA 重跑、远程 CI、qualification lock 和 12-cell pilot 待完成 |
-| P3-08 | 正式三 seed 后台矩阵 | BLOCKED_QUALIFICATION | clean-SHA qualification、CI 与 pilot selection 冻结后交付正式 start |
-| P3-09 | GATE-3 独立评审 | NOT_STARTED | 正式 run 完成后执行 |
-| P3-10 | GATE-NN-MVP 独立评审 | NOT_STARTED | 正式 run 完成后执行 |
+| P3-04 | checkpoint-v3、suite registry 与可恢复矩阵 | DONE | 81/81 cells、352 checksums、累计墙钟 49.16h |
+| P3-05 | 因果干预、顺序学习、表征和成本分析 | DONE | 1,605,120 条逐样本记录与 10,000 次 paired bootstrap |
+| P3-06 | network-mvp-v1 bundle 与推理接口 | DONE | Gate-controlled 接口已验证；科学 Gate 失败，未生成正式 bundle |
+| P3-07 | CPU/MPS qualification、pilot 与后台管理脚本 | DONE | clean MPS 39/39、远程 CPU CI、12/12 pilot 与锁均通过 |
+| P3-08 | 正式三 seed 后台矩阵 | DONE | `p3-full-dc6c259c-20260719T034230Z`，81/81 complete |
+| P3-09 | GATE-3 独立评审 | DONE | `reports/gates/GATE-3.md`：PASSED |
+| P3-10 | GATE-NN-MVP 独立评审 | DONE | `reports/gates/GATE-NN-MVP.md`：FAILED；0/2 收益类别，predictive 因果失败 |

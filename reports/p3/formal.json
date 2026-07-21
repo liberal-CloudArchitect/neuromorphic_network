@@ -1,0 +1,480 @@
+{
+  "causal": {
+    "all_three_passed": false,
+    "comparisons": [
+      {
+        "ablated_mean": 0.4137369791666667,
+        "absolute_effect_threshold": 0.15,
+        "bootstrap_samples": 10000,
+        "ci95_lower": 0.32568359375,
+        "ci95_upper": 0.4957682291666667,
+        "confidence": 0.95,
+        "effect_direction": "full_minus_ablated",
+        "estimate": 0.4212239583333333,
+        "full_mean": 0.8349609375,
+        "holm_adjusted_p": 0.0005999400059994001,
+        "metric": "query_accuracy",
+        "module": "episodic",
+        "p_value": 0.00019998000199980003,
+        "passed": true,
+        "relative_effect": null,
+        "relative_effect_threshold": null,
+        "task_id": "associative_recall.v1",
+        "variant": "episodic-no-read-write"
+      },
+      {
+        "ablated_mean": 0.621337890625,
+        "absolute_effect_threshold": 0.1,
+        "bootstrap_samples": 10000,
+        "ci95_lower": 0.14404296875,
+        "ci95_upper": 0.3179951985677083,
+        "confidence": 0.95,
+        "effect_direction": "full_minus_ablated",
+        "estimate": 0.20829264322916666,
+        "full_mean": 0.8296305338541666,
+        "holm_adjusted_p": 0.0005999400059994001,
+        "metric": "response_accuracy",
+        "module": "working",
+        "p_value": 0.00019998000199980003,
+        "passed": true,
+        "relative_effect": null,
+        "relative_effect_threshold": null,
+        "task_id": "delayed_rule_switch.v1",
+        "variant": "working-reset"
+      },
+      {
+        "ablated_mean": 0.89410196185112,
+        "absolute_effect_threshold": null,
+        "bootstrap_samples": 10000,
+        "ci95_lower": -0.0024913747608661385,
+        "ci95_upper": 0.0009448760002852552,
+        "confidence": 0.95,
+        "effect_direction": "full_minus_ablated",
+        "estimate": -0.0005940364549556673,
+        "full_mean": 0.8935079253961643,
+        "holm_adjusted_p": 0.517948205179482,
+        "metric": "analysis_aulc",
+        "module": "predictive",
+        "p_value": 0.517948205179482,
+        "passed": false,
+        "relative_effect": -0.0006648362460716651,
+        "relative_effect_threshold": 0.1,
+        "task_id": "small_graph.v1",
+        "variant": "predictive-loss-zero"
+      }
+    ]
+  },
+  "gates": {
+    "GATE-3": "PASSED",
+    "GATE-NN-MVP": "FAILED",
+    "network_mvp_bundle_allowed": false
+  },
+  "integrity": {
+    "cell_statuses": {
+      "COMPLETED": 81
+    },
+    "failed_cells": [],
+    "passed": true,
+    "resource_limited_cells": [],
+    "sample_audit": {
+      "identity_errors": [],
+      "record_count": 1605120,
+      "schemas": {
+        "p3-evaluation-sample-v1": 1488384,
+        "p3-small-graph-rollout-v1": 116736
+      },
+      "selection_splits_absent": true,
+      "splits": {
+        "analysis": 87552,
+        "ood": 1050624,
+        "test": 466944
+      }
+    },
+    "verification": {
+      "cells": 81,
+      "checksums_ok": true,
+      "missing_cells": [],
+      "registered_artifacts": 352,
+      "run_id": "p3-full-dc6c259c-20260719T034230Z",
+      "sample_records": 1605120,
+      "status": "completed"
+    }
+  },
+  "model_costs": {
+    "gru": {
+      "p50_latency_ms_median": 4.765582998516038,
+      "p95_latency_ms_median": 6.147709005745128,
+      "parameter_matching": [
+        "parameter-match:0.001037",
+        "parameter-match:0.001037",
+        "parameter-match:0.001037"
+      ],
+      "parameters": [
+        230604,
+        230604,
+        230604
+      ],
+      "peak_memory_bytes_max": 9115582464,
+      "profiler_coverage_min": 1.0,
+      "wall_clock_seconds": [
+        1897.6490712089872,
+        1944.2787751670112,
+        1666.948464999994
+      ]
+    },
+    "modular": {
+      "p50_latency_ms_median": 140.68308300920762,
+      "p95_latency_ms_median": 270.7537090027472,
+      "parameter_matching": [
+        "modular",
+        "modular",
+        "modular"
+      ],
+      "parameters": [
+        230365,
+        230365,
+        230365
+      ],
+      "peak_memory_bytes_max": 9115582464,
+      "profiler_coverage_min": 0.9931239554619843,
+      "wall_clock_seconds": [
+        5429.222288707999,
+        7413.465308416009,
+        15515.584434916993
+      ]
+    },
+    "transformer": {
+      "p50_latency_ms_median": 4.589624993968755,
+      "p95_latency_ms_median": 4.71354101318866,
+      "parameter_matching": [
+        "parameter-match:0.004137",
+        "parameter-match:0.004137",
+        "parameter-match:0.004137"
+      ],
+      "parameters": [
+        231318,
+        231318,
+        231318
+      ],
+      "peak_memory_bytes_max": 9115582464,
+      "profiler_coverage_min": 0.9969565706084265,
+      "wall_clock_seconds": [
+        1513.7492067499988,
+        1747.007419874979,
+        1563.8115171669924
+      ]
+    }
+  },
+  "network_benefit": {
+    "categories": {
+      "aulc": false,
+      "forgetting": false,
+      "ood": false,
+      "sparse_routing": false,
+      "task_score": false
+    },
+    "categories_passed": 0,
+    "comparisons": [
+      {
+        "baseline": "gru",
+        "baseline_mean": 0.69921875,
+        "bootstrap_samples": 10000,
+        "category": "task_score",
+        "ci95_lower": 0.19695332845052083,
+        "ci95_upper": 0.20924241807725694,
+        "confidence": 0.95,
+        "effect_direction": "modular_minus_baseline",
+        "estimate": 0.20298936631944442,
+        "holm_adjusted_p": 0.0015998400159984002,
+        "invalid_reason": "SmallGraph chance level was not frozen for chance normalization",
+        "minimum_relative_effect": 0.05,
+        "modular_mean": 0.9022081163194444,
+        "p_value": 0.00019998000199980003,
+        "passed": false,
+        "primary_metric_valid": false,
+        "relative_effect": 0.29030881440099315
+      },
+      {
+        "baseline": "transformer",
+        "baseline_mean": 0.9882269965277778,
+        "bootstrap_samples": 10000,
+        "category": "task_score",
+        "ci95_lower": -0.09110514322916667,
+        "ci95_upper": -0.08075595431857639,
+        "confidence": 0.95,
+        "effect_direction": "modular_minus_baseline",
+        "estimate": -0.08601888020833333,
+        "holm_adjusted_p": 0.0015998400159984002,
+        "invalid_reason": "SmallGraph chance level was not frozen for chance normalization",
+        "minimum_relative_effect": 0.05,
+        "modular_mean": 0.9022081163194444,
+        "p_value": 0.00019998000199980003,
+        "passed": false,
+        "primary_metric_valid": false,
+        "relative_effect": -0.08704364534724128
+      },
+      {
+        "baseline": "gru",
+        "baseline_mean": 0.4985568583770483,
+        "bootstrap_samples": 10000,
+        "category": "ood",
+        "ci95_lower": 0.20227218829323076,
+        "ci95_upper": 0.22693002973325443,
+        "confidence": 0.95,
+        "effect_direction": "modular_minus_baseline",
+        "estimate": 0.21237581992587637,
+        "holm_adjusted_p": 0.0015998400159984002,
+        "invalid_reason": "SmallGraph OOD records lack rollout success_rate and task chance levels were not frozen; optimal_action_rate is descriptive only",
+        "minimum_relative_effect": null,
+        "modular_mean": 0.7109326783029246,
+        "p_value": 0.00019998000199980003,
+        "passed": false,
+        "primary_metric_valid": false,
+        "relative_effect": 0.42598114208522414
+      },
+      {
+        "baseline": "transformer",
+        "baseline_mean": 0.7504704989987658,
+        "bootstrap_samples": 10000,
+        "category": "ood",
+        "ci95_lower": -0.05037553206657322,
+        "ci95_upper": -0.031031712607094697,
+        "confidence": 0.95,
+        "effect_direction": "modular_minus_baseline",
+        "estimate": -0.03953782069584122,
+        "holm_adjusted_p": 0.0015998400159984002,
+        "invalid_reason": "SmallGraph OOD records lack rollout success_rate and task chance levels were not frozen; optimal_action_rate is descriptive only",
+        "minimum_relative_effect": null,
+        "modular_mean": 0.7109326783029246,
+        "p_value": 0.00019998000199980003,
+        "passed": false,
+        "primary_metric_valid": false,
+        "relative_effect": -0.05268404387459638
+      },
+      {
+        "baseline": "gru",
+        "baseline_mean": 0.6669859492323051,
+        "bootstrap_samples": 10000,
+        "category": "aulc",
+        "ci95_lower": 0.13542812868915496,
+        "ci95_upper": 0.15171087767953662,
+        "confidence": 0.95,
+        "effect_direction": "modular_minus_baseline",
+        "estimate": 0.1462779512848705,
+        "holm_adjusted_p": 0.0015998400159984002,
+        "invalid_reason": null,
+        "minimum_relative_effect": 0.15,
+        "modular_mean": 0.8132639005171756,
+        "p_value": 0.00019998000199980003,
+        "passed": true,
+        "primary_metric_valid": true,
+        "relative_effect": 0.21931189323138683
+      },
+      {
+        "baseline": "transformer",
+        "baseline_mean": 0.9406163070011884,
+        "bootstrap_samples": 10000,
+        "category": "aulc",
+        "ci95_lower": -0.13241157228474817,
+        "ci95_upper": -0.12130528222297621,
+        "confidence": 0.95,
+        "effect_direction": "modular_minus_baseline",
+        "estimate": -0.1273524064840128,
+        "holm_adjusted_p": 0.0015998400159984002,
+        "invalid_reason": null,
+        "minimum_relative_effect": 0.15,
+        "modular_mean": 0.8132639005171756,
+        "p_value": 0.00019998000199980003,
+        "passed": false,
+        "primary_metric_valid": true,
+        "relative_effect": -0.13539251396781485
+      },
+      {
+        "baseline": "gru",
+        "baseline_mean": 0.0577894581688775,
+        "bootstrap_samples": 10000,
+        "category": "forgetting",
+        "ci95_lower": -0.15843253831068674,
+        "ci95_upper": 0.0932067334651947,
+        "confidence": 0.95,
+        "effect_direction": "baseline_minus_modular",
+        "estimate": -0.043941447304354765,
+        "holm_adjusted_p": 0.5135486451354865,
+        "invalid_reason": "protocol-v2 did not freeze a minimum forgetting effect threshold",
+        "minimum_relative_effect": null,
+        "modular_mean": 0.10173090547323227,
+        "p_value": 0.5135486451354865,
+        "passed": false,
+        "primary_metric_valid": false,
+        "relative_effect": -0.7603713323621266
+      },
+      {
+        "baseline": "transformer",
+        "baseline_mean": 0.29566818806860184,
+        "bootstrap_samples": 10000,
+        "category": "forgetting",
+        "ci95_lower": 0.14022771765788397,
+        "ci95_upper": 0.27617619683345157,
+        "confidence": 0.95,
+        "effect_direction": "baseline_minus_modular",
+        "estimate": 0.19393728259536955,
+        "holm_adjusted_p": 0.0015998400159984002,
+        "invalid_reason": "protocol-v2 did not freeze a minimum forgetting effect threshold",
+        "minimum_relative_effect": null,
+        "modular_mean": 0.10173090547323227,
+        "p_value": 0.00019998000199980003,
+        "passed": false,
+        "primary_metric_valid": false,
+        "relative_effect": 0.655928809461137
+      }
+    ],
+    "minimum_categories": 2
+  },
+  "predictive_acute_negative_control": {
+    "maximum_absolute_difference": 0.0,
+    "passed": true,
+    "per_task_per_seed_difference": {
+      "associative_recall.v1": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "delayed_rule_switch.v1": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "small_graph.v1": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  },
+  "protocol_deviations": [
+    {
+      "effect": "confirmatory categories cannot pass",
+      "id": "DR-001",
+      "reason": "protocol-v2 did not freeze SmallGraph chance normalization and formal SmallGraph OOD artifacts contain optimal_action_rate but no rollout success_rate",
+      "scope": "task_score_and_ood"
+    },
+    {
+      "effect": "confirmatory category cannot pass",
+      "id": "DR-002",
+      "reason": "protocol-v2 did not freeze a minimum forgetting effect threshold",
+      "scope": "forgetting"
+    },
+    {
+      "effect": "GATE-NN-MVP routing health cannot be established from formal artifacts",
+      "id": "DR-003",
+      "reason": "formal summaries record expert calls and MACs but not capacity-drop counts",
+      "scope": "routing_capacity"
+    }
+  ],
+  "representation_analysis": {
+    "gru": {
+      "associative_recall.v1": {
+        "linear_cka": 0.06319600797262125,
+        "linear_probe_accuracy": 0.07291666666666667,
+        "rsa_spearman": 0.008407827626004071
+      },
+      "delayed_rule_switch.v1": {
+        "linear_cka": 0.2858481108027449,
+        "linear_probe_accuracy": 1.0,
+        "rsa_spearman": 0.2432885542738522
+      },
+      "small_graph.v1": {
+        "linear_cka": 0.25775149046276646,
+        "linear_probe_accuracy": 0.7558232931726908,
+        "rsa_spearman": 0.1776137856783881
+      }
+    },
+    "modular": {
+      "associative_recall.v1": {
+        "linear_cka": 0.05376539034853131,
+        "linear_probe_accuracy": 0.66015625,
+        "rsa_spearman": 0.012007766943182913
+      },
+      "delayed_rule_switch.v1": {
+        "linear_cka": 0.5206387271582462,
+        "linear_probe_accuracy": 0.9684244791666666,
+        "rsa_spearman": 0.5617808178588308
+      },
+      "small_graph.v1": {
+        "linear_cka": 0.10942313379782499,
+        "linear_probe_accuracy": 0.7365461847389558,
+        "rsa_spearman": 0.08024923807534665
+      }
+    },
+    "transformer": {
+      "associative_recall.v1": {
+        "linear_cka": 0.0945183548427002,
+        "linear_probe_accuracy": 1.0,
+        "rsa_spearman": 0.06152587906181614
+      },
+      "delayed_rule_switch.v1": {
+        "linear_cka": 0.19543524363952944,
+        "linear_probe_accuracy": 1.0,
+        "rsa_spearman": 0.2726956524308978
+      },
+      "small_graph.v1": {
+        "linear_cka": 0.1789625876509347,
+        "linear_probe_accuracy": 0.8200803212851405,
+        "rsa_spearman": 0.05915015831762445
+      }
+    }
+  },
+  "run": {
+    "artifact_directory": "/Volumes/Samsung/neuromorphic/artifacts/runs/p3-full-dc6c259c-20260719T034230Z",
+    "device": "mps",
+    "protocol_version": "p3-protocol-v2",
+    "run_id": "p3-full-dc6c259c-20260719T034230Z",
+    "seeds": [
+      17,
+      29,
+      43
+    ],
+    "selected_presets": {
+      "gru": "preset-2",
+      "modular": "preset-2",
+      "transformer": "preset-2"
+    },
+    "source_git_commit": "dc6c259c559eb3af6e4cc74c905cc2dfadf3690a",
+    "wall_clock_limit_seconds": 259200.0,
+    "wall_clock_seconds": 176968.535795541
+  },
+  "schema_version": "p3-formal-report-v1",
+  "sparse_routing": {
+    "all_experts_active": true,
+    "capacity_drops": null,
+    "capacity_evidence_available": false,
+    "dense_p50_latency_ms_median": 128.63204200402834,
+    "expert_call_shares": {
+      "episodic_memory.v1": 0.30092592592592593,
+      "predictive_adapter.v1": 0.25,
+      "working_memory.v1": 0.44907407407407407
+    },
+    "maximum_task_score_drop": 0.10400390625,
+    "mean_optional_mac_saving": 0.3761487050960735,
+    "minimum_profiler_coverage": 0.9931239554619843,
+    "passed": false,
+    "per_seed_optional_mac_saving": {
+      "17": 0.37823725981620715,
+      "29": 0.4108187134502924,
+      "43": 0.339390142021721
+    },
+    "sparse_p50_latency_ms_median": 140.68308300920762,
+    "task_score_drop": {
+      "associative_recall.v1": 0.10400390625,
+      "delayed_rule_switch.v1": -0.0035400390625,
+      "small_graph.v1": 0.0006510416666666297
+    }
+  },
+  "statistics": {
+    "bootstrap_samples": 10000,
+    "confidence": 0.95,
+    "method": "strict paired seed-to-stratum/sample percentile bootstrap",
+    "multiple_comparisons": "Holm step-down within frozen network and causal families",
+    "rng_seed": 20260715
+  }
+}

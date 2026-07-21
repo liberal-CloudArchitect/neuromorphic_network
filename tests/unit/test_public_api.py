@@ -4,4 +4,4 @@ import neuromorphic
 
 
 def test_package_version_is_gate_2_release() -> None:
-    assert neuromorphic.__version__ == "0.3.0"
+    assert neuromorphic.__version__ == "0.4.0"
