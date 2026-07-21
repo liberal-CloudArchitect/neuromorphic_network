@@ -23,6 +23,7 @@ import torch
 from torch import Tensor, nn
 from torch.nn import functional as F
 
+from neuromorphic.core.contracts import ModuleContext, trusted_internal_execution
 from neuromorphic.core.network_state import NetworkState
 from neuromorphic.core.registry import (
     P4_OPTIONAL_EXPERT_IDS,
@@ -30,10 +31,15 @@ from neuromorphic.core.registry import (
     SPARSE_ROUTER_V2,
 )
 from neuromorphic.evaluation.p3_records import as_baseline_output, p3_sample_records
-from neuromorphic.evaluation.p3_statistics import normalized_aulc
+from neuromorphic.evaluation.p3_statistics import (
+    adjust_family,
+    normalized_aulc,
+    paired_hierarchical_bootstrap,
+)
 from neuromorphic.evaluation.p4_statistics import small_graph_chance_level
 from neuromorphic.tasks import SmallGraphTask, TaskBatch, create_task
 from neuromorphic.tasks.base import SequenceTask
+from neuromorphic.tasks.control import task_control_from_batch
 from neuromorphic.telemetry.events_v2 import TelemetryV2Event
 from neuromorphic.training.baselines import GRUBaseline, TransformerBaseline
 from neuromorphic.training.config import resolve_device
@@ -335,6 +341,17 @@ def _metric(output: object, batch: TaskBatch) -> float:
     metrics = task_metrics(as_baseline_output(output), batch)
     key = "optimal_action_rate" if batch.metadata["task_id"] == "small_graph.v1" else "accuracy"
     return metrics[key]
+
+
+def _mean_primary_records(task_id: str, records: Sequence[Mapping[str, object]]) -> float:
+    key = {
+        "associative_recall.v1": "query_accuracy",
+        "delayed_rule_switch.v1": "response_accuracy",
+        "small_graph.v1": "optimal_action_rate",
+    }[task_id]
+    if not records:
+        raise ValueError(f"P4 {task_id} score requires non-empty records")
+    return sum(_numeric(record, key) for record in records) / len(records)
 
 
 def _prediction_stats(output: object) -> dict[str, float]:
@@ -731,12 +748,18 @@ def _rollout_policy(
     model: nn.Module, cell: P4ExperimentCell, task: SmallGraphTask, device: torch.device
 ) -> Any:
     history: list[Tensor] = []
+    modular_state: NetworkState | None = None
 
     def policy(observation: Tensor, reset: bool) -> Tensor:
+        nonlocal modular_state
         if reset:
             history.clear()
         history.append(observation.detach())
-        inputs = torch.stack(history).unsqueeze(0).to(device)
+        inputs = (
+            observation.detach().unsqueeze(0).unsqueeze(0).to(device)
+            if cell.model_id == "modular-v2"
+            else torch.stack(history).unsqueeze(0).to(device)
+        )
         length = inputs.shape[1]
         batch = TaskBatch(
             inputs=inputs,
@@ -754,7 +777,31 @@ def _rollout_policy(
             auxiliary_targets={},
         )
         with torch.no_grad():
-            output = _forward(model, cell, batch, evaluation=True)
+            if cell.model_id == "modular-v2":
+                if reset or modular_state is None:
+                    modular_state = cast(Any, model).initial_state(
+                        1, device=device, dtype=inputs.dtype
+                    )
+                control = task_control_from_batch(batch)
+                context = ModuleContext(
+                    task_id=task.task_id,
+                    phase="evaluate",
+                    reset_mask=torch.tensor([[reset]], dtype=torch.bool, device=device),
+                    eligible_modules=P4_OPTIONAL_EXPERT_IDS,
+                    telemetry_enabled=False,
+                )
+                with trusted_internal_execution():
+                    output = cast(Any, model).forward_step(
+                        inputs,
+                        control,
+                        modular_state,
+                        context,
+                        terminal_mask=torch.zeros(1, dtype=torch.bool, device=device),
+                        **_intervention_kwargs(cell, evaluation=True),
+                    )
+                modular_state = cast(Any, output).state
+            else:
+                output = _forward(model, cell, batch, evaluation=True)
         return cast(Tensor, cast(Any, output).logits)[0, -1]
 
     return policy
@@ -897,9 +944,11 @@ def _evaluate_cell(
     deadline: float,
 ) -> dict[str, object]:
     if cell.cell_type == "pilot":
-        scores, pilot_prediction = _score_split(model, cell, config, device, split="validation")
+        pilot_scores, pilot_prediction = _score_split(
+            model, cell, config, device, split="validation"
+        )
         return {
-            "validation": scores,
+            "validation": pilot_scores,
             "prediction": _prediction_summary(pilot_prediction),
         }
     task_ids = (cell.task_id,) if cell.task_id else P4_TASK_ORDER
@@ -907,6 +956,7 @@ def _evaluate_cell(
     views: dict[str, object] = {}
     routing: dict[str, dict[str, Any]] = {}
     prediction: dict[str, dict[str, float]] = {}
+    scores: dict[str, float] = {}
     telemetry_records: list[dict[str, object]] = []
     model.eval()
     for task_id in task_ids:
@@ -942,6 +992,8 @@ def _evaluate_cell(
                 _merge_prediction(prediction_total, _prediction_stats(output))
             records.extend(view)
             task_views[f"{split}:{distribution}"] = len(view)
+            if split == "test":
+                scores[task_id] = _mean_primary_records(task_id, view)
         for distribution in _OOD_DISTRIBUTIONS[task_id]:
             task = _task(config, task_id, distribution)
             for start in range(0, config.data.ood, config.budget.batch_size):
@@ -973,6 +1025,7 @@ def _evaluate_cell(
             )
             records.extend(rollout)
             task_views["test:v1:live_rollout"] = len(rollout)
+            scores[task_id] = sum(_numeric(item, "success_rate") for item in rollout) / len(rollout)
         views[task_id] = task_views
         routing_summary = {**route_total, **_optional_mac_profile(model, route_total)}
         prediction_summary = _prediction_summary(prediction_total)
@@ -1043,6 +1096,7 @@ def _evaluate_cell(
         "views": views,
         "routing": routing,
         "prediction": prediction,
+        "scores": scores,
         "telemetry_v2_events": len(telemetry_records),
     }
 
@@ -1356,6 +1410,279 @@ def _write_pilot_lock(
     return result
 
 
+def _mechanism_gate_evidence(config: P4SuiteConfig, directory: Path) -> dict[str, object]:
+    """Apply the frozen P4 mechanism thresholds to the completed 24-cell matrix."""
+
+    summaries: dict[tuple[int, str], Mapping[str, object]] = {}
+    for cell in config.matrix():
+        path = directory / "cells" / cell.cell_id / "summary.json"
+        if not path.is_file():
+            raise FileNotFoundError(f"P4 mechanism summary is missing: {path}")
+        summaries[(cell.seed, cell.variant_id)] = cast(
+            Mapping[str, object], json.loads(path.read_text(encoding="utf-8"))
+        )
+
+    relative_aulc: list[dict[str, object]] = []
+    zero_aulc: list[dict[str, object]] = []
+    relative_forecast: list[dict[str, object]] = []
+    zero_forecast: list[dict[str, object]] = []
+    sparse_margin: list[dict[str, object]] = []
+    zero_sparse_margin: list[dict[str, object]] = []
+    final_score_deltas: dict[str, float] = {}
+    prediction_totals = {
+        task_id: {"eligible": 0.0, "covered": 0.0, "error_sum": 0.0, "persistence_sum": 0.0}
+        for task_id in P4_TASK_ORDER
+    }
+    active_optional_macs = 0.0
+    dense_optional_macs = 0.0
+    capacity_drops = 0.0
+    reserved_total = 0.0
+    reserved_executed = 0.0
+    sparse_score_deltas: dict[str, float] = {}
+    aulc_denominators_valid = True
+    forecast_denominators_valid = True
+
+    for seed in config.seeds:
+        full = summaries[(seed, "full")]
+        predictor_off = summaries[(seed, "predictor-off")]
+        dense_memory = summaries[(seed, "dense-memory")]
+        full_training = cast(Mapping[str, object], full["training"])
+        off_training = cast(Mapping[str, object], predictor_off["training"])
+        full_aulc = cast(Mapping[str, object], full_training["analysis_aulc"])
+        off_aulc = cast(Mapping[str, object], off_training["analysis_aulc"])
+        full_evaluation = cast(Mapping[str, object], full["evaluation"])
+        off_evaluation = cast(Mapping[str, object], predictor_off["evaluation"])
+        dense_evaluation = cast(Mapping[str, object], dense_memory["evaluation"])
+        full_scores = cast(Mapping[str, object], full_evaluation["scores"])
+        off_scores = cast(Mapping[str, object], off_evaluation["scores"])
+        dense_scores = cast(Mapping[str, object], dense_evaluation["scores"])
+        full_prediction = cast(Mapping[str, object], full_evaluation["prediction"])
+        full_routing = cast(Mapping[str, object], full_evaluation["routing"])
+
+        for task_index, task_id in enumerate(P4_TASK_ORDER):
+            full_value = _numeric(full_aulc, task_id)
+            off_value = _numeric(off_aulc, task_id)
+            if off_value <= 0.0:
+                aulc_denominators_valid = False
+                relative = 0.0
+            else:
+                relative = (full_value - off_value) / off_value
+            common = {
+                "task_id": task_id,
+                "split": "analysis",
+                "distribution": "v1",
+                "stratum": task_id,
+                "seed": seed,
+                "sample_index": task_index,
+            }
+            relative_aulc.append(
+                {
+                    **common,
+                    "model_id": "modular-v2",
+                    "variant_id": "full-relative-aulc",
+                    "value": relative,
+                }
+            )
+            zero_aulc.append(
+                {
+                    **common,
+                    "model_id": "modular-v2",
+                    "variant_id": "predictor-off-reference",
+                    "value": 0.0,
+                }
+            )
+            final_score_deltas[f"s{seed}:{task_id}"] = _numeric(full_scores, task_id) - _numeric(
+                off_scores, task_id
+            )
+            sparse_score_deltas[f"s{seed}:{task_id}"] = _numeric(full_scores, task_id) - _numeric(
+                dense_scores, task_id
+            )
+
+            prediction = cast(Mapping[str, object], full_prediction[task_id])
+            covered = _numeric(prediction, "covered")
+            forecast_error = _numeric(prediction, "error_sum") / max(covered, 1.0)
+            persistence_error = _numeric(prediction, "persistence_sum") / max(covered, 1.0)
+            if covered <= 0.0 or persistence_error <= 0.0:
+                forecast_denominators_valid = False
+                forecast_relative = 0.0
+            else:
+                forecast_relative = (persistence_error - forecast_error) / persistence_error
+            forecast_common = {**common, "stratum": f"forecast:{task_id}"}
+            relative_forecast.append(
+                {
+                    **forecast_common,
+                    "model_id": "modular-v2",
+                    "variant_id": "forecast-relative-improvement",
+                    "value": forecast_relative,
+                }
+            )
+            zero_forecast.append(
+                {
+                    **forecast_common,
+                    "model_id": "modular-v2",
+                    "variant_id": "persistence-reference",
+                    "value": 0.0,
+                }
+            )
+            sparse_common = {
+                **common,
+                "split": "test",
+                "stratum": f"sparse:{task_id}",
+            }
+            sparse_margin.append(
+                {
+                    **sparse_common,
+                    "model_id": "modular-v2",
+                    "variant_id": "sparse-noninferiority-margin",
+                    "value": sparse_score_deltas[f"s{seed}:{task_id}"] + 0.02,
+                }
+            )
+            zero_sparse_margin.append(
+                {
+                    **sparse_common,
+                    "model_id": "modular-v2",
+                    "variant_id": "dense-memory-reference",
+                    "value": 0.0,
+                }
+            )
+            for key in prediction_totals[task_id]:
+                prediction_totals[task_id][key] += _numeric(prediction, key)
+
+            routing = cast(Mapping[str, object], full_routing[task_id])
+            active_optional_macs += _numeric(routing, "active_optional_macs")
+            dense_optional_macs += _numeric(routing, "dense_optional_macs")
+            capacity_drops += _numeric(routing, "capacity_drops")
+            if task_id == "associative_recall.v1":
+                reserved_total += _numeric(routing, "reserved_total")
+                reserved_executed += _numeric(routing, "reserved_executed")
+
+    bootstrap = paired_hierarchical_bootstrap(
+        relative_aulc,
+        zero_aulc,
+        samples=config.budget.bootstrap_samples,
+        rng_seed=20_260_715,
+    )
+    forecast_bootstrap = paired_hierarchical_bootstrap(
+        relative_forecast,
+        zero_forecast,
+        samples=config.budget.bootstrap_samples,
+        rng_seed=20_260_715,
+    )
+    sparse_bootstrap = paired_hierarchical_bootstrap(
+        sparse_margin,
+        zero_sparse_margin,
+        samples=config.budget.bootstrap_samples,
+        rng_seed=20_260_715,
+    )
+    adjusted_p = adjust_family([bootstrap, forecast_bootstrap, sparse_bootstrap])
+    aulc_pass = (
+        aulc_denominators_valid
+        and bootstrap.estimate >= 0.05
+        and bootstrap.lower > 0.0
+        and adjusted_p[0] <= 0.05
+        and min(final_score_deltas.values()) >= -0.02
+    )
+
+    prediction_by_task: dict[str, dict[str, float]] = {}
+    for task_id, total in prediction_totals.items():
+        covered = total["covered"]
+        error = total["error_sum"] / max(covered, 1.0)
+        persistence = total["persistence_sum"] / max(covered, 1.0)
+        prediction_by_task[task_id] = {
+            "coverage": covered / max(total["eligible"], 1.0),
+            "forecast_error": error,
+            "persistence_error": persistence,
+            "relative_improvement": (persistence - error) / max(persistence, 1.0e-12),
+        }
+    total_covered = sum(item["covered"] for item in prediction_totals.values())
+    total_eligible = sum(item["eligible"] for item in prediction_totals.values())
+    total_error = sum(item["error_sum"] for item in prediction_totals.values()) / max(
+        total_covered, 1.0
+    )
+    total_persistence = sum(item["persistence_sum"] for item in prediction_totals.values()) / max(
+        total_covered, 1.0
+    )
+    forecast_improvement = (total_persistence - total_error) / max(total_persistence, 1.0e-12)
+    positive_prediction_tasks = sum(
+        item["relative_improvement"] > 0.0 for item in prediction_by_task.values()
+    )
+    prediction_pass = (
+        forecast_denominators_valid
+        and total_covered / max(total_eligible, 1.0) >= 0.95
+        and forecast_improvement >= 0.05
+        and positive_prediction_tasks >= 2
+        and forecast_bootstrap.lower > 0.0
+        and adjusted_p[1] <= 0.05
+    )
+
+    mac_reduction = 1.0 - active_optional_macs / max(dense_optional_macs, 1.0)
+    reserved_coverage = reserved_executed / max(reserved_total, 1.0)
+    sparse_pass = (
+        dense_optional_macs > 0.0
+        and mac_reduction >= 0.20
+        and min(sparse_score_deltas.values()) >= -0.02
+        and capacity_drops == 0.0
+        and reserved_total > 0.0
+        and reserved_coverage == 1.0
+        and sparse_bootstrap.lower > 0.0
+        and adjusted_p[2] <= 0.05
+    )
+    violations: list[str] = []
+    if not aulc_pass:
+        violations.append("predictive causal AULC gate failed")
+    if not prediction_pass:
+        violations.append("forecast quality gate failed")
+    if not sparse_pass:
+        violations.append("semantic sparse-routing gate failed")
+    return {
+        "status": "PASSED" if not violations else "FAILED",
+        "violations": violations,
+        "predictive_causality": {
+            "relative_macro_aulc": bootstrap.estimate,
+            "ci95": [bootstrap.lower, bootstrap.upper],
+            "p_value": bootstrap.p_value,
+            "holm_adjusted_p": adjusted_p[0],
+            "bootstrap_samples": bootstrap.samples,
+            "rng_seed": 20_260_715,
+            "denominators_valid": aulc_denominators_valid,
+            "minimum_final_score_delta": min(final_score_deltas.values()),
+            "per_seed_task_final_score_delta": final_score_deltas,
+            "passed": aulc_pass,
+        },
+        "prediction_quality": {
+            "coverage": total_covered / max(total_eligible, 1.0),
+            "forecast_error": total_error,
+            "persistence_error": total_persistence,
+            "relative_improvement": forecast_improvement,
+            "paired_relative_improvement": forecast_bootstrap.estimate,
+            "ci95": [forecast_bootstrap.lower, forecast_bootstrap.upper],
+            "p_value": forecast_bootstrap.p_value,
+            "holm_adjusted_p": adjusted_p[1],
+            "bootstrap_samples": forecast_bootstrap.samples,
+            "denominators_valid": forecast_denominators_valid,
+            "positive_tasks": positive_prediction_tasks,
+            "by_task": prediction_by_task,
+            "passed": prediction_pass,
+        },
+        "sparse_routing": {
+            "active_optional_macs": active_optional_macs,
+            "dense_optional_macs": dense_optional_macs,
+            "mac_reduction": mac_reduction,
+            "minimum_dense_score_delta": min(sparse_score_deltas.values()),
+            "per_seed_task_dense_score_delta": sparse_score_deltas,
+            "capacity_drops": capacity_drops,
+            "reserved_total": reserved_total,
+            "reserved_coverage": reserved_coverage,
+            "noninferiority_margin": sparse_bootstrap.estimate,
+            "noninferiority_ci95": [sparse_bootstrap.lower, sparse_bootstrap.upper],
+            "noninferiority_p_value": sparse_bootstrap.p_value,
+            "holm_adjusted_p": adjusted_p[2],
+            "bootstrap_samples": sparse_bootstrap.samples,
+            "passed": sparse_pass,
+        },
+    }
+
+
 def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
     """Run or resume P4, preserving every failure and completed matrix cell."""
 
@@ -1595,6 +1922,46 @@ def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
                     "pilot_selection_sha256": _sha256(selection_path),
                     "selected_preset": selection["selected_preset"],
                     "optimizer": selection["optimizer"],
+                    "config_hash": config.config_hash(),
+                    "matrix_hash": config.matrix_hash(),
+                },
+                dirty=False,
+            )
+    elif config.profile == "mechanism" and registry["status"] == "completed":
+        evidence = _mechanism_gate_evidence(config, directory)
+        report_path = directory / "mechanism-report.json"
+        report = {
+            "schema_version": "p4-mechanism-report-v1",
+            "status": evidence["status"],
+            "run_id": run_id,
+            "git_commit": commit,
+            "git_dirty": dirty,
+            "protocol_hash": PROTOCOL_HASH,
+            "config_hash": config.config_hash(),
+            "matrix_hash": config.matrix_hash(),
+            "completed_cells": registry["completed_cells"],
+            "total_cells": registry["total_cells"],
+            "evidence": evidence,
+        }
+        _write_json(report_path, report)
+        registry["mechanism_evidence"] = evidence
+        registry["status"] = (
+            "mechanism_passed" if evidence["status"] == "PASSED" else "mechanism_failed"
+        )
+        if (
+            registry["status"] == "mechanism_passed"
+            and not dirty
+            and _is_repository_path(report_path)
+        ):
+            _write_external_lock(
+                config.control_root.parent / "mechanism-lock.json",
+                {
+                    "schema_version": "p4-mechanism-lock-v1",
+                    "status": "PASSED",
+                    "git_commit": commit,
+                    "mechanism_report": _repository_relative(report_path),
+                    "mechanism_report_sha256": _sha256(report_path),
+                    "protocol_hash": PROTOCOL_HASH,
                     "config_hash": config.config_hash(),
                     "matrix_hash": config.matrix_hash(),
                 },

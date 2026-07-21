@@ -40,6 +40,7 @@ TERMINAL_STATUSES = {
     "qualification_passed",
     "pilot_passed",
     "mechanism_passed",
+    "mechanism_failed",
     "completed",
     "completed_with_failures",
     "failed",

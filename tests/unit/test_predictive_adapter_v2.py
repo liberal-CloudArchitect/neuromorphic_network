@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 import torch
 
 from neuromorphic.core.contracts import BrainPacket, ModuleContext, ModuleState
@@ -79,13 +80,12 @@ def test_predictive_adapter_v2_consumes_only_consecutive_forecasts_with_bounded_
 
 def test_predictive_adapter_v2_commits_next_forecast_and_ignores_padding() -> None:
     module = PredictiveAdapterV2(feature_dim=4, action_count=4, action_dim=2)
-    packet_goal = _goal(2, 2)
+    packet_goal = _goal(2, 1)
     packet_goal[0, 0, 72 + 2] = 1.0
-    packet_goal[0, 1, 72 + 1] = 1.0
     packet = _packet(
-        torch.randn(2, 2, 4),
-        valid_mask=torch.tensor([[True, True], [True, False]]),
-        step_index=torch.tensor([[0, 1], [3, 4]], dtype=torch.long),
+        torch.randn(2, 1, 4),
+        valid_mask=torch.tensor([[True], [False]]),
+        step_index=torch.tensor([[1], [4]], dtype=torch.long),
         goal_context=packet_goal,
     )
     state = module.initial_state(2, device=torch.device("cpu"), dtype=torch.float32)
@@ -93,12 +93,21 @@ def test_predictive_adapter_v2_commits_next_forecast_and_ignores_padding() -> No
     output = module(packet, state, _context(packet))
 
     assert output.prediction_logits is not None
-    assert output.prediction_logits.shape == (2, 2, 4)
+    assert output.prediction_logits.shape == (2, 1, 4)
     assert output.state.tensors["forecast"].shape == (2, 4)
-    assert output.state.tensors["forecast_valid"].tolist() == [True, True]
-    assert output.state.tensors["source_step"].tolist() == [1, 3]
+    assert output.state.tensors["forecast_valid"].tolist() == [True, False]
+    assert output.state.tensors["source_step"].tolist() == [1, -1]
 
     reset = module.reset_state(output.state, torch.tensor([True, False]))
     assert not reset.tensors["forecast_valid"][0].item()
     assert reset.tensors["source_step"][0].item() == -1
     assert torch.count_nonzero(reset.tensors["forecast"][0]) == 0
+
+
+def test_predictive_adapter_v2_rejects_uncausal_direct_multistep_calls() -> None:
+    module = PredictiveAdapterV2(feature_dim=4, action_count=4, action_dim=2)
+    packet = _packet(torch.randn(2, 2, 4))
+    state = module.initial_state(2, device=torch.device("cpu"), dtype=torch.float32)
+
+    with pytest.raises(ValueError, match="exactly one step"):
+        module(packet, state, _context(packet))

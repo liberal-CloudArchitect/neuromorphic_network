@@ -11,9 +11,10 @@ import yaml
 from torch import nn
 
 from neuromorphic.core.registry import PREDICTIVE_ADAPTER_V2, SPARSE_ROUTER_V2
+from neuromorphic.tasks import SmallGraphTask
 from neuromorphic.telemetry.events_v2 import TelemetryV2Event
 from neuromorphic.training import p4_suite
-from neuromorphic.training.p4_config import P4SuiteConfig
+from neuromorphic.training.p4_config import P4_TASK_ORDER, P4SuiteConfig
 
 
 class _TinyModel(nn.Module):
@@ -60,9 +61,16 @@ def _patch_fast_execution(monkeypatch: pytest.MonkeyPatch, calls: list[str]) -> 
     def train(*args: Any, **kwargs: Any) -> dict[str, object]:
         del kwargs
         directory = cast(Path, args[4])
+        cell = args[1]
         (directory / "checkpoint.pt").write_bytes(b"fixture")
+        aulc = 0.6 if cell.variant_id == "predictor-off" else 0.7
         return {
             "steps": 12,
+            "analysis_aulc": {
+                "associative_recall.v1": aulc,
+                "delayed_rule_switch.v1": aulc,
+                "small_graph.v1": aulc,
+            },
             "validation_macro_aulc": 0.6,
             "last_loss": 0.4,
             "settings": {
@@ -114,7 +122,30 @@ def _patch_fast_execution(monkeypatch: pytest.MonkeyPatch, calls: list[str]) -> 
                 )
             )
         p4_suite._write_jsonl(directory / "telemetry-v2.jsonl", events)
-        return {"record_count": 0, "views": {}, "routing": {}, "prediction": {}}
+        return {
+            "record_count": 0,
+            "views": {},
+            "scores": {task_id: 0.8 for task_id in P4_TASK_ORDER},
+            "routing": {
+                task_id: {
+                    "active_optional_macs": 75.0,
+                    "dense_optional_macs": 100.0,
+                    "capacity_drops": 0.0,
+                    "reserved_total": 10.0 if task_id == "associative_recall.v1" else 0.0,
+                    "reserved_executed": (10.0 if task_id == "associative_recall.v1" else 0.0),
+                }
+                for task_id in P4_TASK_ORDER
+            },
+            "prediction": {
+                task_id: {
+                    "eligible": 100.0,
+                    "covered": 100.0,
+                    "error_sum": 90.0,
+                    "persistence_sum": 100.0,
+                }
+                for task_id in P4_TASK_ORDER
+            },
+        }
 
     monkeypatch.setattr(p4_suite, "_build_model", build)
     monkeypatch.setattr(p4_suite, "_train_cell", train)
@@ -209,6 +240,23 @@ def test_p4_task_factory_uses_fresh_namespace() -> None:
     assert batch.metadata["split_seed"] == 11101
 
 
+def test_modular_small_graph_rollout_uses_incremental_causal_steps(tmp_path: Path) -> None:
+    config = _config(tmp_path, run_id="rollout")
+    cell = config.matrix()[0]
+    model, _ = p4_suite._build_model(config, cell, torch.device("cpu"))
+    task = cast(SmallGraphTask, p4_suite._task(config, "small_graph.v1"))
+
+    records = task.rollout_records(
+        p4_suite._rollout_policy(model, cell, task, torch.device("cpu")),
+        "test",
+        [0, 1],
+        max_steps=3,
+    )
+
+    assert len(records) == 2
+    assert {record["sample_index"] for record in records} == {0, 1}
+
+
 def test_pilot_never_enters_analysis_test_or_ood_evaluator(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -259,3 +307,33 @@ def test_direct_suite_rejects_incomplete_prerequisite_evidence(tmp_path: Path) -
 
     with pytest.raises(ValueError, match="incomplete evidence"):
         p4_suite._lock_hash(lock, required_status="PASSED", expected_commit="abc123")
+
+
+def test_mechanism_run_emits_a_scientific_gate_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[str] = []
+    _patch_fast_execution(monkeypatch, calls)
+    monkeypatch.setattr(p4_suite, "_lock_hash", lambda *args, **kwargs: "frozen-lock")
+    raw = yaml.safe_load(Path("configs/experiments/p4/mechanism.yaml").read_text(encoding="utf-8"))
+    raw.update(
+        {
+            "output_root": str(tmp_path),
+            "control_root": str(tmp_path / "control"),
+            "run_id": "mechanism-fixture",
+            "device": "cpu",
+        }
+    )
+    config = P4SuiteConfig.model_validate(raw)
+
+    result = p4_suite.run_p4_suite(config)
+
+    assert result["status"] == "mechanism_passed"
+    assert result["completed_cells"] == 24
+    report = json.loads(
+        (tmp_path / "mechanism-fixture/mechanism-report.json").read_text(encoding="utf-8")
+    )
+    assert report["status"] == "PASSED"
+    assert report["evidence"]["predictive_causality"]["bootstrap_samples"] == 10_000
+    assert report["evidence"]["prediction_quality"]["passed"] is True
+    assert report["evidence"]["sparse_routing"]["passed"] is True

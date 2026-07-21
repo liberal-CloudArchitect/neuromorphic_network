@@ -110,6 +110,11 @@ class PredictiveAdapterV2(nn.Module):
         validate_inputs(
             packet, state, context, module_id=self.module_id, version=self.state_version
         )
+        if packet.representation.shape[1] != 1:
+            raise ValueError(
+                "predictive_adapter.v2 consumes exactly one step; use "
+                "ModularBrainNetworkV2.forward_batch for causal sequences"
+            )
         if packet.representation.shape[-1] != self.feature_dim:
             raise ValueError(f"representation feature size must be {self.feature_dim}")
         current = state
@@ -192,6 +197,11 @@ class PredictiveAdapterV2(nn.Module):
         validate_inputs(
             packet, state, context, module_id=self.module_id, version=self.state_version
         )
+        if packet.representation.shape[1] != 1:
+            raise ValueError(
+                "predictive_adapter.v2 commits exactly one step; use "
+                "ModularBrainNetworkV2.forward_batch for causal sequences"
+            )
         goal = require_goal_context(packet, minimum_features=72)
         current = state
         for step in range(packet.representation.shape[1]):
