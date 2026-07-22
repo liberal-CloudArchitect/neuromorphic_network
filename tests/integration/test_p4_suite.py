@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import Any, cast
 
@@ -290,6 +291,41 @@ def test_pilot_never_enters_analysis_test_or_ood_evaluator(
         (tmp_path / "pilot-validation-only/pilot-selection.json").read_text(encoding="utf-8")
     )
     assert selection["status"] == "PASSED"
+
+
+def test_formal_training_consumes_frozen_early_stop_patience(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _config(tmp_path, run_id="early-stop")
+    config = config.model_copy(update={"budget": config.budget.model_copy(update={"patience": 1})})
+    cell = config.matrix()[0]
+    model, _ = p4_suite._build_model(config, cell, torch.device("cpu"))
+    directory = tmp_path / "cell"
+    suite_directory = tmp_path / "suite"
+    directory.mkdir(parents=True)
+    suite_directory.mkdir(parents=True)
+
+    monkeypatch.setattr(
+        p4_suite,
+        "_score_split",
+        lambda *args, **kwargs: ({task_id: 0.5 for task_id in P4_TASK_ORDER}, {}),
+    )
+
+    result = p4_suite._train_cell(
+        model,
+        cell,
+        config,
+        torch.device("cpu"),
+        directory,
+        suite_directory,
+        0,
+        time.perf_counter() + 120.0,
+        None,
+        None,
+    )
+
+    assert result["steps"] == 4
+    assert (directory / "checkpoint.pt").is_file()
 
 
 def test_direct_suite_rejects_incomplete_prerequisite_evidence(tmp_path: Path) -> None:

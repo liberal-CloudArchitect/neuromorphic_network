@@ -8,6 +8,7 @@ from neuromorphic.training.p4_config import (
     build_p4_matrix,
     load_p4_suite_config,
 )
+from neuromorphic.training.p4_suite import _early_stop_reached
 
 
 def test_p4_profile_matrix_sizes_are_frozen() -> None:
@@ -52,3 +53,15 @@ def test_p4_formal_optimizer_must_match_selected_pilot() -> None:
                 "selected_preset": "preset-0",
             }
         )
+
+
+def test_p4_early_stop_preserves_exact_pilot_and_continual_budgets() -> None:
+    pilot = load_p4_suite_config(Path("configs/experiments/p4/pilot.yaml"))
+    full = load_p4_suite_config(Path("configs/experiments/p4/full.yaml"))
+    pilot_cell = build_p4_matrix(pilot)[0]
+    continual_cell = next(cell for cell in build_p4_matrix(full) if cell.cell_type == "continual")
+    shared_cell = next(cell for cell in build_p4_matrix(full) if cell.cell_type == "shared")
+
+    assert not _early_stop_reached(pilot_cell, stale=100, patience=10)
+    assert not _early_stop_reached(continual_cell, stale=100, patience=10)
+    assert _early_stop_reached(shared_cell, stale=10, patience=10)

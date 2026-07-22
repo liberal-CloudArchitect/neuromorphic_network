@@ -434,6 +434,12 @@ def _task_sequence(cell: P4ExperimentCell, step: int) -> str:
     return P4_TASK_ORDER[step % 3]
 
 
+def _early_stop_reached(cell: P4ExperimentCell, *, stale: int, patience: int) -> bool:
+    """Keep pilot and continual-learning budgets exact while bounding other cells."""
+
+    return cell.cell_type not in {"continual", "pilot"} and stale >= patience
+
+
 def _settings(config: P4SuiteConfig, cell: P4ExperimentCell) -> tuple[float, float, float]:
     preset = cell.variant_id if cell.cell_type == "pilot" else config.selected_preset
     if preset is not None:
@@ -706,6 +712,10 @@ def _train_cell(
                     "remaining_wall_clock_seconds": max(deadline - time.perf_counter(), 0.0),
                 },
             )
+        if _early_stop_reached(cell, stale=stale, patience=config.budget.patience):
+            if step % config.budget.checkpoint_interval != 0:
+                save(checkpoint)
+            break
     if best_checkpoint.is_file():
         load_p4_checkpoint(
             best_checkpoint,
