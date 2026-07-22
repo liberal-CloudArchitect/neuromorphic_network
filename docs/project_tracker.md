@@ -16,7 +16,7 @@ last_updated: 2026-07-21
 | P1 任务基线与训练骨架 | DONE | GATE-1 PASSED | 三任务、单体基线、恢复与统计已冻结 |
 | P2 模块化类脑网络 | DONE | GATE-2 PASSED | 完整 MPS suite、独立 verifier 与远程 CPU CI 均通过 |
 | P3 因果、泛化与网络 MVP | DONE | GATE-3 PASSED / GATE-NN-MVP FAILED | 科研矩阵完整；当前网络未取得 MVP 资格 |
-| P4 预测闭环与语义稀疏路由 | IN_PROGRESS | GATE-4-QUAL 待 clean-SHA 裁决 | 工程实现与 CPU 资格路径完成；正式科学矩阵未运行 |
+| P4 预测闭环与语义稀疏路由 | IN_PROGRESS | GATE-4-QUAL PASSED | clean-SHA CPU/MPS 工程资格通过；pilot 与正式科学矩阵未运行 |
 
 ## P2 工作项
 
@@ -85,8 +85,8 @@ last_updated: 2026-07-21
 | P4-07 | 实现 chance/OOD/AULC/forgetting 与严格配对统计 | DONE | SmallGraph DP、非法输入和 bootstrap fixture |
 | P4-08 | 实现 qualification/pilot/mechanism/full registry | DONE | 8/4/24/81 cell 配置与完整性测试 |
 | P4-09 | 实现后台 start/status/logs/resume/stop/verify 和阶段锁 | DONE | 控制器单测、clean SHA/CI/MPS/电源/磁盘预检 |
-| P4-10 | CPU/MPS qualification 与独立 GATE-4-QUAL | IN_PROGRESS | CPU 8/8 已通过；等待 clean SHA 的 MPS 与远程 CI |
-| P4-11 | 冻结 pilot 选择 | NOT_STARTED | 必须先通过 GATE-4-QUAL |
+| P4-10 | CPU/MPS qualification 与独立 GATE-4-QUAL | DONE | MPS run `p4-qualification-20260721T092723Z` 8/8；CI `29818335673` 绿色；独立复审通过 |
+| P4-11 | 冻结 pilot 选择 | NOT_STARTED | GATE-4-QUAL 已通过；需运行 4-cell pilot 后按冻结资格规则选择 |
 | P4-12 | 三 seed 24-cell 机制矩阵与 GATE-4-MECH | NOT_STARTED | 不允许用 qualification 替代 |
 | P4-13 | 81-cell 正式矩阵与 GATE-4 | NOT_STARTED | 仅机制 Gate 通过后启动 |
 | P4-14 | GATE-NN-MVP-v2 与可选 network-mvp-v2 bundle | NOT_STARTED | 只有科学 Gate 通过才生成 bundle |

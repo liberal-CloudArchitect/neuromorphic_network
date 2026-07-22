@@ -1,0 +1,29 @@
+{
+  "schema_version": "p4-qualification-summary-v1",
+  "status": "PASSED",
+  "qualification_only": true,
+  "gate": "GATE-4-QUAL",
+  "source_commit": "1856c9dcb5e88b735466bfe2ee5da312a2d4ecd7",
+  "mps_run_id": "p4-qualification-20260721T092723Z",
+  "ci_run_id": 29818335673,
+  "cells": {
+    "completed": 8,
+    "total": 8,
+    "failed": 0,
+    "resource_limited": 0
+  },
+  "evidence": {
+    "checkpoint_count": 4,
+    "sample_records": 4864,
+    "registered_artifacts": 34,
+    "checksums_ok": true,
+    "forecast_path_seen": true,
+    "feedback_nonzero": true,
+    "semantic_reservation_covered": true,
+    "capacity_drops_zero": true,
+    "sparse_mac_less_than_dense": true,
+    "dense_control_matches_dense_macs": true
+  },
+  "scientific_claim": "none",
+  "next_allowed_stage": "pilot"
+}

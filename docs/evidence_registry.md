@@ -129,5 +129,8 @@ last_updated: 2026-07-15
 - `ARCH-P4-PRED-001`：`predictive_adapter.v2` 只消费上一有效 transition 的 forecast，以 stop-gradient 当前感觉表示为目标，并将最大幅度 `0.25` 的误差反馈用于下一步行为路径。
 - `ARCH-P4-ROUTE-001`：`sparse_router.v2` 只在 episodic/working 状态专家中 top-1；AR store/query 语义保留 episodic，任一专家容量可覆盖全部有效 token，predictor 改为必经路径。
 - `QUAL-P4-CPU-001`：dirty-worktree 工程运行 `p4-qualification-20260721T082948Z` 完成 8/8 cells、4 个 checkpoint-v4、4,864 条样本记录和 34 个校验和；该记录仅证明 CPU 路径，不关闭 `GATE-4-QUAL`。
+- `QUAL-P4-MPS-001`：clean SHA `1856c9dcb5e88b735466bfe2ee5da312a2d4ecd7` 的 MPS run `p4-qualification-20260721T092723Z` 完成 8/8 cells、4 个 checkpoint-v4、4,864 条逐样本记录和 34 个校验和；forecast、反馈、semantic reservation、dense/legacy 控制及 active/dense MAC 路径均被覆盖。
+- `QUAL-P4-CI-001`：同一实现 SHA 的 GitHub Actions run `29818335673` 全部成功，覆盖 lint、format、mypy、pytest、P1/P2/P3 回归及 P4 CPU qualification。
+- `QUAL-P4-GATE-001`：独立复审在修复 predictor 多步契约和 mechanism-lock 闭环后 0 issue，`GATE-4-QUAL PASSED`；该裁决只允许进入 pilot。
 
-P4 的 MPS clean-SHA qualification、远程 CPU CI、pilot、正式机制与完整矩阵必须在对应报告中另行登记。当前不得授予 network-mvp-v2 标签。
+P4 的 pilot、正式机制与完整矩阵仍须在对应报告中另行登记。当前不得授予 network-mvp-v2 标签，也不得把 qualification 指标解释为科学收益。
