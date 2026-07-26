@@ -12,7 +12,7 @@
 - P1 状态：三任务、弱基线、GRU/Transformer、训练/恢复/统计和产物体系已通过 `GATE-1`。
 - P2 状态：六个人工计算模块、真实 top-2 稀疏执行、checkpoint-v2、telemetry 等价及 CPU/MPS 可移植性已通过 `GATE-2`。
 - P3 状态：81-cell、三 seed 正式矩阵与独立统计已完成；`GATE-3 PASSED`，`GATE-NN-MVP FAILED`。
-- P4 状态：`modular-brain-v2`、checkpoint-v4、telemetry-v2、新 split 空间、两级矩阵及后台控制器已实现；clean-SHA CPU/MPS qualification 与 `GATE-4-QUAL` 已通过，正式 pilot、`GATE-4-MECH` 和 81-cell 矩阵尚未运行。
+- P4 状态：`modular-brain-v2`、checkpoint-v4、telemetry-v2、新 split 空间、两级矩阵及后台控制器已实现；pilot 已选 `preset-3`。首次 24-cell mechanism 在 24 小时上限完成 15/24，结论为 `RESOURCE_LIMIT / INCONCLUSIVE`；CR-004 正在以不改变科学协议的批量 live rollout 修复吞吐。
 - 模型状态：情景记忆与工作记忆获得 P3 任务内因果支持；预测适配、双基线总体收益和稀疏非劣性仍待 P4 冻结协议检验，当前网络不是 qualified MVP。
 
 ## 快速开始
@@ -94,7 +94,7 @@ P4 使用按阶段加锁的后台控制器；`full` 在机制 Gate 未生成同�
 
 qualification 只验证代码路径、MPS、恢复、观测和产物纪律；pilot 只使用 train/validation。机制与完整矩阵的正式科学结论必须分别由 `GATE-4-MECH`、`GATE-4` 和 `GATE-NN-MVP-v2` 独立裁决。
 
-当前只允许启动 pilot。资格结果不构成预测有效、稀疏路由非劣、泛化改善或 network MVP 结论；版本继续保持 `0.4.0`。
+当前必须先在 CR-004 的新 clean SHA 上重建 CI、qualification 与 pilot lock，再从新 run ID 启动 mechanism；不得恢复或拼接旧的资源停止 run。资格和 pilot 不构成预测有效、稀疏路由非劣、泛化改善或 network MVP 结论；版本继续保持 `0.4.0`。
 
 P3 qualification、pilot 和正式实验由后台脚本管理：
 

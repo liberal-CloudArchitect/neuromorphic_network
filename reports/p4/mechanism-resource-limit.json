@@ -1,0 +1,30 @@
+{
+  "schema_version": "p4-resource-limit-report-v1",
+  "run_id": "p4-mechanism-fb53443a-20260722T160041Z",
+  "source_git_commit": "fb53443ac65948317f840092dccbed7b71badebe",
+  "protocol_version": "p4-protocol-v1",
+  "status": "RESOURCE_LIMIT",
+  "scientific_conclusion": "INCONCLUSIVE",
+  "wall_clock_seconds": 86887.17972508405,
+  "total_cells": 24,
+  "completed_cells": 15,
+  "failed_cells": 0,
+  "resource_limited_cells": 1,
+  "pending_cells": 8,
+  "registered_artifacts": 62,
+  "sample_records": 514560,
+  "checksums_ok": true,
+  "mechanism_lock_created": false,
+  "missing_cells": [
+    "control__shared__modular-v2__legacy-capacity__s29__all",
+    "shared__shared__modular-v2__full__s43__all",
+    "causal__shared__modular-v2__predictor-off__s43__all",
+    "causal__shared__modular-v2__loss-zero__s43__all",
+    "causal__shared__modular-v2__feedback-zero__s43__all",
+    "control__shared__modular-v2__acute-feedback-off__s43__all",
+    "control__shared__modular-v2__shuffle-forecast__s43__all",
+    "control__shared__modular-v2__dense-memory__s43__all",
+    "control__shared__modular-v2__legacy-capacity__s43__all"
+  ],
+  "disposition": "Preserve artifacts; do not resume or combine with a new SHA. Requalify and rerun from a fresh locked implementation."
+}

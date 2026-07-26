@@ -23,7 +23,7 @@ import torch
 from torch import Tensor, nn
 from torch.nn import functional as F
 
-from neuromorphic.core.contracts import ModuleContext, trusted_internal_execution
+from neuromorphic.core.contracts import ModuleContext, ModuleState, trusted_internal_execution
 from neuromorphic.core.network_state import NetworkState
 from neuromorphic.core.registry import (
     P4_OPTIONAL_EXPERT_IDS,
@@ -100,6 +100,60 @@ def _write_jsonl(path: Path, records: Sequence[Mapping[str, object]]) -> None:
         for record in records:
             stream.write(json.dumps(record, sort_keys=True, ensure_ascii=False) + "\n")
     temporary.replace(path)
+
+
+def _emit_progress(event: str, **fields: object) -> None:
+    """Write one line-buffered JSON event for durable background logs."""
+
+    print(
+        json.dumps(
+            {"event": event, "timestamp": datetime.now(UTC).isoformat(), **fields},
+            sort_keys=True,
+        ),
+        flush=True,
+    )
+
+
+def _select_network_state(state: NetworkState, indices: Tensor) -> NetworkState:
+    return NetworkState(
+        {
+            module_id: ModuleState(
+                module_state.module_id,
+                module_state.version,
+                {
+                    name: tensor if tensor.ndim == 0 else tensor.index_select(0, indices)
+                    for name, tensor in module_state.tensors.items()
+                },
+            )
+            for module_id, module_state in state.module_states.items()
+        },
+        state.valid_step_counts.index_select(0, indices),
+    )
+
+
+def _scatter_network_state(
+    base: NetworkState, update: NetworkState, indices: Tensor
+) -> NetworkState:
+    return NetworkState(
+        {
+            module_id: ModuleState(
+                module_state.module_id,
+                module_state.version,
+                {
+                    name: tensor
+                    if tensor.ndim == 0
+                    else tensor.index_copy(
+                        0,
+                        indices,
+                        update.module_states[module_id].tensors[name],
+                    )
+                    for name, tensor in module_state.tensors.items()
+                },
+            )
+            for module_id, module_state in base.module_states.items()
+        },
+        base.valid_step_counts.index_copy(0, indices, update.valid_step_counts),
+    )
 
 
 def _numeric(mapping: Mapping[str, object], key: str) -> float:
@@ -699,6 +753,7 @@ def _train_cell(
                 stale += 1
         if step % config.budget.checkpoint_interval == 0 or step == cell.max_steps:
             save(checkpoint)
+            remaining_wall_clock_seconds = max(deadline - time.perf_counter(), 0.0)
             _write_json(
                 suite_directory / "heartbeat.json",
                 {
@@ -709,8 +764,20 @@ def _train_cell(
                     "max_steps": cell.max_steps,
                     "updated_at": datetime.now(UTC).isoformat(),
                     "free_bytes": shutil.disk_usage(suite_directory).free,
-                    "remaining_wall_clock_seconds": max(deadline - time.perf_counter(), 0.0),
+                    "remaining_wall_clock_seconds": remaining_wall_clock_seconds,
                 },
+            )
+            _emit_progress(
+                "cell_progress",
+                cell_id=cell.cell_id,
+                seed=cell.seed,
+                task_id=task_id,
+                step=step,
+                max_steps=cell.max_steps,
+                last_loss=last_loss,
+                best_macro=best.get("macro"),
+                stale_evaluations=stale,
+                remaining_wall_clock_seconds=remaining_wall_clock_seconds,
             )
         if _early_stop_reached(cell, stale=stale, patience=config.budget.patience):
             if step % config.budget.checkpoint_interval != 0:
@@ -824,35 +891,182 @@ def _rollout_records_with_chance(
     split: Literal["test", "ood"],
     size: int,
     device: torch.device,
+    *,
+    batch_size: int,
+    deadline: float,
 ) -> list[dict[str, object]]:
-    records = task.rollout_records(
-        _rollout_policy(model, cell, task, device), split, list(range(size)), device=device
-    )
-    for record in records:
-        index = cast(int, record["sample_index"])
-        batch = task.generate(split, [index], device=torch.device("cpu"))
-        nodes = int(batch.auxiliary_targets["node_count"][0, 0])
-        shortest = int(batch.auxiliary_targets["optimal_distance"][0, 0])
-        horizon = max(nodes * 2, shortest * 2)
-        chance = small_graph_chance_level(
-            batch.auxiliary_targets["adjacency"][0, 0].numpy(),
-            start=int(batch.auxiliary_targets["start_node"][0, 0]),
-            goal=int(batch.auxiliary_targets["goal_node"][0, 0]),
-            node_count=nodes,
-            horizon=horizon,
-        )
-        record.update(
-            {
-                "schema_version": "p4-small-graph-rollout-v1",
-                "model_id": cell.model_id,
-                "variant_id": cell.variant_id,
-                "seed": cell.seed,
-                "namespace": "p4",
-                "horizon": horizon,
-                "chance": chance,
-                "stratum": record["bootstrap_stratum"],
-            }
-        )
+    """Run independent graph episodes in fixed-size batches.
+
+    The previous scalar implementation issued one MPS kernel sequence per
+    sample and dominated the formal evaluation wall clock.  Rows remain
+    episode-local: every chunk starts with a fresh recurrent state, completed
+    rows are excluded from later forwards, and no state is shared between rows.
+    """
+
+    if size <= 0 or batch_size <= 0:
+        raise ValueError("rollout size and batch_size must be positive")
+    records: list[dict[str, object]] = []
+    for chunk_start in range(0, size, batch_size):
+        if time.perf_counter() >= deadline:
+            raise P4ResourceLimit("P4 wall-clock budget exhausted during live rollout")
+        sample_indices = list(range(chunk_start, min(chunk_start + batch_size, size)))
+        graphs = [task._make_graph(split, sample_index) for sample_index in sample_indices]
+        distances = [
+            task._distances(graph.adjacency, graph.goal, graph.node_count) for graph in graphs
+        ]
+        shortest = [
+            distance[graph.start] for graph, distance in zip(graphs, distances, strict=True)
+        ]
+        horizons = [
+            max(graph.node_count * 2, distance * 2)
+            for graph, distance in zip(graphs, shortest, strict=True)
+        ]
+        current = [graph.start for graph in graphs]
+        steps = [0] * len(graphs)
+        optimal = [0] * len(graphs)
+        invalid = [0] * len(graphs)
+        history_inputs: list[Tensor] = []
+        modular_state: NetworkState | None = None
+        turn = 0
+        while True:
+            active = torch.tensor(
+                [
+                    current[index] != graph.goal and steps[index] < horizons[index]
+                    for index, graph in enumerate(graphs)
+                ],
+                dtype=torch.bool,
+            )
+            if not bool(active.any()):
+                break
+            if time.perf_counter() >= deadline:
+                raise P4ResourceLimit("P4 wall-clock budget exhausted during live rollout")
+            observations = torch.stack(
+                [
+                    (
+                        task._observation(graph, current[index])
+                        if bool(active[index])
+                        else torch.zeros(task.input_dim, dtype=torch.float32)
+                    )
+                    for index, graph in enumerate(graphs)
+                ]
+            )
+            history_inputs.append(observations)
+            active_indices = torch.nonzero(active, as_tuple=False).flatten().to(device)
+            if cell.model_id == "modular-v2":
+                inputs = observations.to(device).index_select(0, active_indices).unsqueeze(1)
+            else:
+                inputs = (
+                    torch.stack(history_inputs, dim=1).to(device).index_select(0, active_indices)
+                )
+            length = inputs.shape[1]
+            valid_mask = torch.ones((len(active_indices), length), dtype=torch.bool, device=device)
+            batch = TaskBatch(
+                inputs=inputs,
+                targets=torch.full(
+                    (len(active_indices), length), -100, dtype=torch.long, device=device
+                ),
+                valid_mask=valid_mask,
+                loss_mask=valid_mask,
+                episode_ids=torch.zeros_like(valid_mask, dtype=torch.long),
+                metadata={
+                    "task_id": task.task_id,
+                    "task_version": task.task_version,
+                    "namespace": "p4",
+                    "split": "rollout",
+                    "distribution": task.distribution,
+                },
+                auxiliary_targets={},
+            )
+            with torch.no_grad():
+                if cell.model_id == "modular-v2":
+                    if modular_state is None:
+                        modular_state = cast(Any, model).initial_state(
+                            len(graphs), device=device, dtype=inputs.dtype
+                        )
+                    selected_state = _select_network_state(modular_state, active_indices)
+                    control = task_control_from_batch(batch)
+                    context = ModuleContext(
+                        task_id=task.task_id,
+                        phase="evaluate",
+                        reset_mask=(
+                            valid_mask
+                            if turn == 0
+                            else torch.zeros_like(valid_mask, dtype=torch.bool)
+                        ),
+                        eligible_modules=P4_OPTIONAL_EXPERT_IDS,
+                        telemetry_enabled=False,
+                    )
+                    with trusted_internal_execution():
+                        output = cast(Any, model).forward_step(
+                            inputs,
+                            control,
+                            selected_state,
+                            context,
+                            terminal_mask=torch.zeros(
+                                len(active_indices), dtype=torch.bool, device=device
+                            ),
+                            **_intervention_kwargs(cell, evaluation=True),
+                        )
+                    modular_state = _scatter_network_state(
+                        modular_state, cast(Any, output).state, active_indices
+                    )
+                else:
+                    output = _forward(model, cell, batch, evaluation=True)
+            action_ids = cast(Tensor, cast(Any, output).logits)[:, -1].argmax(dim=-1)
+            indexed_actions = zip(
+                active_indices.detach().cpu().tolist(),
+                action_ids.detach().cpu().tolist(),
+                strict=True,
+            )
+            for index, action_id in indexed_actions:
+                graph = graphs[index]
+                action = int(action_id)
+                action_nodes = task._action_nodes(graph, current[index])
+                steps[index] += 1
+                if 0 <= action < task.max_actions:
+                    next_node = int(action_nodes[action].item())
+                    if next_node >= 0:
+                        if distances[index][next_node] == distances[index][current[index]] - 1:
+                            optimal[index] += 1
+                        current[index] = next_node
+                    else:
+                        invalid[index] += 1
+                else:
+                    invalid[index] += 1
+            turn += 1
+        for index, (sample_index, graph) in enumerate(zip(sample_indices, graphs, strict=True)):
+            chance = small_graph_chance_level(
+                graph.adjacency.numpy(),
+                start=graph.start,
+                goal=graph.goal,
+                node_count=graph.node_count,
+                horizon=horizons[index],
+            )
+            stratum = f"nodes-{graph.node_count}/distance-{shortest[index]}"
+            records.append(
+                {
+                    "schema_version": "p4-small-graph-rollout-v1",
+                    "task_id": task.task_id,
+                    "task_version": task.task_version,
+                    "distribution": task.distribution,
+                    "split": split,
+                    "sample_index": sample_index,
+                    "success_rate": float(current[index] == graph.goal),
+                    "path_excess": float(max(steps[index] - shortest[index], 0)),
+                    "optimal_action_rate": optimal[index] / max(steps[index], 1),
+                    "invalid_actions": invalid[index],
+                    "node_count": graph.node_count,
+                    "shortest_distance": shortest[index],
+                    "bootstrap_stratum": stratum,
+                    "model_id": cell.model_id,
+                    "variant_id": cell.variant_id,
+                    "seed": cell.seed,
+                    "namespace": "p4",
+                    "horizon": horizons[index],
+                    "chance": chance,
+                    "stratum": stratum,
+                }
+            )
     return records
 
 
@@ -1024,14 +1238,28 @@ def _evaluate_cell(
             task_views[f"ood:{distribution}"] = config.data.ood
             if task_id == "small_graph.v1":
                 rollout = _rollout_records_with_chance(
-                    model, cell, cast(SmallGraphTask, task), "ood", config.data.ood, device
+                    model,
+                    cell,
+                    cast(SmallGraphTask, task),
+                    "ood",
+                    config.data.ood,
+                    device,
+                    batch_size=config.budget.batch_size,
+                    deadline=deadline,
                 )
                 records.extend(rollout)
                 task_views[f"ood:{distribution}:live_rollout"] = len(rollout)
         if task_id == "small_graph.v1":
             task = cast(SmallGraphTask, _task(config, task_id))
             rollout = _rollout_records_with_chance(
-                model, cell, task, "test", config.data.test, device
+                model,
+                cell,
+                task,
+                "test",
+                config.data.test,
+                device,
+                batch_size=config.budget.batch_size,
+                deadline=deadline,
             )
             records.extend(rollout)
             task_views["test:v1:live_rollout"] = len(rollout)
@@ -1750,6 +1978,14 @@ def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
         _write_json(registry_path, registry)
 
     persist()
+    _emit_progress(
+        "suite_started",
+        run_id=run_id,
+        profile=config.profile,
+        total_cells=len(entries),
+        prior_wall_clock_seconds=prior,
+        wall_clock_budget_seconds=config.budget.wall_clock_hours * 3600.0,
+    )
     for cursor, cell in enumerate(config.matrix()):
         entry = entries[cursor]
         if entry["cell_id"] != cell.cell_id:
@@ -1762,6 +1998,12 @@ def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
         if time.perf_counter() >= deadline or shutil.disk_usage(directory).free < 20 * GIB:
             entry["status"] = "RESOURCE_LIMIT"
             registry["status"] = "resource_limit"
+            _emit_progress(
+                "cell_resource_limit",
+                run_id=run_id,
+                cell_id=cell.cell_id,
+                completed_cells=sum(item["status"] == "COMPLETED" for item in entries),
+            )
             break
         cell_directory = directory / "cells" / cell.cell_id
         cell_directory.mkdir(parents=True, exist_ok=True)
@@ -1769,6 +2011,14 @@ def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
         entry["artifact_dir"] = cell_directory.relative_to(directory).as_posix()
         entry["attempts"].append({"started_at": datetime.now(UTC).isoformat()})
         persist()
+        _emit_progress(
+            "cell_started",
+            run_id=run_id,
+            cell_id=cell.cell_id,
+            cursor=cursor,
+            total_cells=len(entries),
+            max_steps=cell.max_steps,
+        )
         try:
             cell_started = time.perf_counter()
             model, matching = _build_model(config, cell, device)
@@ -1793,10 +2043,22 @@ def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
             if training.get("stopped"):
                 entry["status"] = "PENDING"
                 registry["status"] = "stopped"
+                _emit_progress(
+                    "cell_stopped",
+                    run_id=run_id,
+                    cell_id=cell.cell_id,
+                    steps=training.get("steps", 0),
+                )
                 break
             if training.get("resource_limited"):
                 entry["status"] = "RESOURCE_LIMIT"
                 registry["status"] = "resource_limit"
+                _emit_progress(
+                    "cell_resource_limit",
+                    run_id=run_id,
+                    cell_id=cell.cell_id,
+                    steps=training.get("steps", 0),
+                )
                 break
             if config.profile == "pilot":
                 # Pilot selection is validation-only.  Do not instantiate or
@@ -1827,10 +2089,25 @@ def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
             entry["error"] = None
             entry["attempts"][-1]["completed_at"] = datetime.now(UTC).isoformat()
             entry["attempts"][-1]["result"] = "COMPLETED"
+            _emit_progress(
+                "cell_completed",
+                run_id=run_id,
+                cell_id=cell.cell_id,
+                cursor=cursor,
+                total_cells=len(entries),
+                steps=training.get("steps", 0),
+                cell_wall_clock_seconds=summary["wall_clock_seconds"],
+            )
         except P4ResourceLimit as error:
             entry["status"] = "RESOURCE_LIMIT"
             entry["error"] = {"type": type(error).__name__, "message": str(error)}
             registry["status"] = "resource_limit"
+            _emit_progress(
+                "cell_resource_limit",
+                run_id=run_id,
+                cell_id=cell.cell_id,
+                error=str(error),
+            )
             break
         except Exception as error:
             entry["status"] = "FAILED"
@@ -1847,6 +2124,13 @@ def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
                     "config_hash": config.config_hash(),
                     "protocol_hash": PROTOCOL_HASH,
                 },
+            )
+            _emit_progress(
+                "cell_failed",
+                run_id=run_id,
+                cell_id=cell.cell_id,
+                error_type=type(error).__name__,
+                error=str(error),
             )
         persist()
     statuses = [entry["status"] for entry in entries]
@@ -1983,6 +2267,16 @@ def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
         if path.is_file() and path.name not in {"registry.json", "heartbeat.json"}
     }
     _write_json(registry_path, registry)
+    _emit_progress(
+        "suite_finished",
+        run_id=run_id,
+        status=registry["status"],
+        completed_cells=registry["completed_cells"],
+        failed_cells=registry["failed_cells"],
+        resource_limited_cells=registry["resource_limited_cells"],
+        total_cells=registry["total_cells"],
+        wall_clock_seconds=registry["wall_clock_seconds"],
+    )
     return {
         "run_id": run_id,
         "artifact_dir": str(directory),

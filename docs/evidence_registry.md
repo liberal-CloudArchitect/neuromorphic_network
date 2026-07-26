@@ -132,5 +132,8 @@ last_updated: 2026-07-15
 - `QUAL-P4-MPS-001`：clean SHA `1856c9dcb5e88b735466bfe2ee5da312a2d4ecd7` 的 MPS run `p4-qualification-20260721T092723Z` 完成 8/8 cells、4 个 checkpoint-v4、4,864 条逐样本记录和 34 个校验和；forecast、反馈、semantic reservation、dense/legacy 控制及 active/dense MAC 路径均被覆盖。
 - `QUAL-P4-CI-001`：同一实现 SHA 的 GitHub Actions run `29818335673` 全部成功，覆盖 lint、format、mypy、pytest、P1/P2/P3 回归及 P4 CPU qualification。
 - `QUAL-P4-GATE-001`：独立复审在修复 predictor 多步契约和 mechanism-lock 闭环后 0 issue，`GATE-4-QUAL PASSED`；该裁决只允许进入 pilot。
+- `PILOT-P4-001`：clean SHA `fb53443ac65948317f840092dccbed7b71badebe` 的 4-cell MPS pilot `p4-pilot-fb53443a-20260722T120059Z` 完成 4/4，按冻结 eligibility 与 validation 排序选中 `preset-3`（lr `3e-4`、temporal loss weight `0.1`、weight decay `1e-2`）。
+- `LIMIT-P4-MECH-001`：同一 SHA 的首次机制 run `p4-mechanism-fb53443a-20260722T160041Z` 在 `86,887.18 s` 停止；完成 15/24、失败 0、checksum 有效，但缺 seed 29 最后一个控制及全部 seed 43，因此只能记为 `RESOURCE_LIMIT / INCONCLUSIVE`，不生成机制锁。
+- `ENG-P4-EXEC-001`：`CR-004` 冻结 execution-only 修复：SmallGraph episode 批量执行并增加 JSONL 进度日志，不改变样本、seed、预算、阈值或统计。128 样本 MPS 前置基准逐样本记录完全一致，吞吐约 `2.99×`；仍须在新 clean SHA 重建 CI、qualification 和 pilot lock。
 
-P4 的 pilot、正式机制与完整矩阵仍须在对应报告中另行登记。当前不得授予 network-mvp-v2 标签，也不得把 qualification 指标解释为科学收益。
+P4 的新 SHA pilot、正式机制与完整矩阵仍须在对应报告中另行登记。当前不得授予 network-mvp-v2 标签，也不得把 qualification、旧 pilot 或不完整机制指标解释为科学收益。

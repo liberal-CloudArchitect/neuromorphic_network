@@ -258,6 +258,89 @@ def test_modular_small_graph_rollout_uses_incremental_causal_steps(tmp_path: Pat
     assert {record["sample_index"] for record in records} == {0, 1}
 
 
+@pytest.mark.parametrize("model_id", ["modular-v2", "gru"])
+def test_batched_small_graph_rollout_matches_scalar_episode_semantics(
+    tmp_path: Path, model_id: str
+) -> None:
+    config = _config(tmp_path, run_id=f"rollout-equivalence-{model_id}")
+    cell = config.matrix()[0].model_copy(update={"model_id": model_id})
+    model, _ = p4_suite._build_model(config, cell, torch.device("cpu"))
+    task = cast(SmallGraphTask, p4_suite._task(config, "small_graph.v1"))
+    sample_indices = list(range(6))
+
+    scalar = task.rollout_records(
+        p4_suite._rollout_policy(model, cell, task, torch.device("cpu")),
+        "test",
+        sample_indices,
+    )
+    batched = p4_suite._rollout_records_with_chance(
+        model,
+        cell,
+        task,
+        "test",
+        len(sample_indices),
+        torch.device("cpu"),
+        batch_size=3,
+        deadline=time.perf_counter() + 120.0,
+    )
+
+    comparable_fields = {
+        "task_id",
+        "task_version",
+        "distribution",
+        "split",
+        "sample_index",
+        "success_rate",
+        "path_excess",
+        "optimal_action_rate",
+        "invalid_actions",
+        "node_count",
+        "shortest_distance",
+        "bootstrap_stratum",
+    }
+    assert [{field: record[field] for field in comparable_fields} for record in batched] == [
+        {field: record[field] for field in comparable_fields} for record in scalar
+    ]
+
+
+def test_batched_small_graph_rollout_honors_deadline(tmp_path: Path) -> None:
+    config = _config(tmp_path, run_id="rollout-deadline")
+    cell = config.matrix()[0]
+    model, _ = p4_suite._build_model(config, cell, torch.device("cpu"))
+    task = cast(SmallGraphTask, p4_suite._task(config, "small_graph.v1"))
+
+    with pytest.raises(p4_suite.P4ResourceLimit, match="wall-clock budget"):
+        p4_suite._rollout_records_with_chance(
+            model,
+            cell,
+            task,
+            "test",
+            2,
+            torch.device("cpu"),
+            batch_size=2,
+            deadline=time.perf_counter() - 1.0,
+        )
+
+
+def test_suite_emits_durable_structured_progress(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls: list[str] = []
+    _patch_fast_execution(monkeypatch, calls)
+    monkeypatch.setattr(p4_suite, "_repository_state", lambda: ("clean-sha", False))
+
+    result = p4_suite.run_p4_suite(_config(tmp_path, run_id="progress"))
+
+    events = [
+        json.loads(line)["event"] for line in capsys.readouterr().out.splitlines() if line.strip()
+    ]
+    assert result["status"] == "qualification_passed"
+    assert events[0] == "suite_started"
+    assert events.count("cell_started") == 8
+    assert events.count("cell_completed") == 8
+    assert events[-1] == "suite_finished"
+
+
 def test_pilot_never_enters_analysis_test_or_ood_evaluator(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -294,7 +377,9 @@ def test_pilot_never_enters_analysis_test_or_ood_evaluator(
 
 
 def test_formal_training_consumes_frozen_early_stop_patience(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     config = _config(tmp_path, run_id="early-stop")
     config = config.model_copy(update={"budget": config.budget.model_copy(update={"patience": 1})})
@@ -326,6 +411,10 @@ def test_formal_training_consumes_frozen_early_stop_patience(
 
     assert result["steps"] == 4
     assert (directory / "checkpoint.pt").is_file()
+    progress = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
+    assert [event["event"] for event in progress] == ["cell_progress", "cell_progress"]
+    assert progress[-1]["step"] == 4
+    assert progress[-1]["last_loss"] is not None
 
 
 def test_direct_suite_rejects_incomplete_prerequisite_evidence(tmp_path: Path) -> None:
