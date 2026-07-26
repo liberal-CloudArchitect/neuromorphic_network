@@ -15,7 +15,7 @@ from neuromorphic.core.registry import PREDICTIVE_ADAPTER_V2, SPARSE_ROUTER_V2
 from neuromorphic.tasks import SmallGraphTask
 from neuromorphic.telemetry.events_v2 import TelemetryV2Event
 from neuromorphic.training import p4_suite
-from neuromorphic.training.p4_config import P4_TASK_ORDER, P4SuiteConfig
+from neuromorphic.training.p4_config import P4_TASK_ORDER, P4SuiteConfig, load_p4_suite_config
 
 
 class _TinyModel(nn.Module):
@@ -320,6 +320,16 @@ def test_batched_small_graph_rollout_honors_deadline(tmp_path: Path) -> None:
             batch_size=2,
             deadline=time.perf_counter() - 1.0,
         )
+
+
+def test_live_rollout_batch_is_separate_from_training_batch(tmp_path: Path) -> None:
+    qualification = _config(tmp_path, run_id="rollout-batch")
+    mechanism = load_p4_suite_config(Path("configs/experiments/p4/mechanism.yaml"))
+
+    assert qualification.budget.batch_size == 8
+    assert p4_suite._live_rollout_batch_size(qualification, qualification.data.test) == 32
+    assert mechanism.budget.batch_size == 64
+    assert p4_suite._live_rollout_batch_size(mechanism, mechanism.data.test) == 1024
 
 
 def test_suite_emits_durable_structured_progress(

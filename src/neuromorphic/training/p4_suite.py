@@ -69,6 +69,7 @@ from neuromorphic.training.reproducibility import set_global_seed
 from neuromorphic.training.trainer import IndexSampler
 
 GIB = 1024**3
+FORMAL_ROLLOUT_BATCH_SIZE = 1024
 _PROTOCOL_PATH = Path(__file__).resolve().parents[3] / "docs" / "p4_implementation_spec.md"
 PROTOCOL_HASH = hashlib.sha256(_PROTOCOL_PATH.read_bytes()).hexdigest()
 _OOD_DISTRIBUTIONS = {
@@ -470,6 +471,12 @@ def _prediction_summary(total: Mapping[str, float]) -> dict[str, float]:
         "relative_improvement": (persistence - error) / max(persistence, 1e-12),
         "feedback_nonzero": float(total.get("logits_feedback_sum", 0.0) > 0.0),
     }
+
+
+def _live_rollout_batch_size(config: P4SuiteConfig, size: int) -> int:
+    """Use larger inference-only batches without changing the training budget."""
+
+    return min(size, max(config.budget.batch_size, FORMAL_ROLLOUT_BATCH_SIZE))
 
 
 def _task_sequence(cell: P4ExperimentCell, step: int) -> str:
@@ -1244,7 +1251,7 @@ def _evaluate_cell(
                     "ood",
                     config.data.ood,
                     device,
-                    batch_size=config.budget.batch_size,
+                    batch_size=_live_rollout_batch_size(config, config.data.ood),
                     deadline=deadline,
                 )
                 records.extend(rollout)
@@ -1258,7 +1265,7 @@ def _evaluate_cell(
                 "test",
                 config.data.test,
                 device,
-                batch_size=config.budget.batch_size,
+                batch_size=_live_rollout_batch_size(config, config.data.test),
                 deadline=deadline,
             )
             records.extend(rollout)
