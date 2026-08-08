@@ -21,7 +21,7 @@
     "run_id": {"type": "string", "minLength": 1},
     "profile": {"enum": ["qualification", "pilot", "mechanism", "full"]},
     "qualification_only": {"type": "boolean"},
-    "protocol_version": {"const": "p4-protocol-v1"},
+    "protocol_version": {"enum": ["p4-protocol-v1", "p4-protocol-v2"]},
     "protocol_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "config_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "matrix_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},

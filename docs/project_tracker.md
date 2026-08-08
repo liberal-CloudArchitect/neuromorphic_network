@@ -16,7 +16,7 @@ last_updated: 2026-07-26
 | P1 任务基线与训练骨架 | DONE | GATE-1 PASSED | 三任务、单体基线、恢复与统计已冻结 |
 | P2 模块化类脑网络 | DONE | GATE-2 PASSED | 完整 MPS suite、独立 verifier 与远程 CPU CI 均通过 |
 | P3 因果、泛化与网络 MVP | DONE | GATE-3 PASSED / GATE-NN-MVP FAILED | 科研矩阵完整；当前网络未取得 MVP 资格 |
-| P4 预测闭环与语义稀疏路由 | IN_PROGRESS | GATE-4-QUAL PASSED（既有 SHA） | pilot 已选 `preset-3`；首次机制矩阵因 24h 资源上限停于 15/24，正按 CR-004 重新资格化 |
+| P4 预测闭环与语义稀疏路由 | IN_PROGRESS | GATE-4-QUAL PASSED（v1 历史 SHA） | v1 两次 mechanism 均资源停止；CR-005 / protocol-v2 已冻结 48h 预算，待新 SHA 重新资格化 |
 
 ## P2 工作项
 
@@ -85,9 +85,10 @@ last_updated: 2026-07-26
 | P4-07 | 实现 chance/OOD/AULC/forgetting 与严格配对统计 | DONE | SmallGraph DP、非法输入和 bootstrap fixture |
 | P4-08 | 实现 qualification/pilot/mechanism/full registry | DONE | 8/4/24/81 cell 配置与完整性测试 |
 | P4-09 | 实现后台 start/status/logs/resume/stop/verify 和阶段锁 | DONE | 控制器单测、clean SHA/CI/MPS/电源/磁盘预检 |
-| P4-10 | CPU/MPS qualification 与独立 GATE-4-QUAL | DONE | MPS run `p4-qualification-20260721T092723Z` 8/8；CI `29818335673` 绿色；独立复审通过 |
-| P4-11 | 冻结 pilot 选择 | IN_PROGRESS | SHA `fb53443a` 的 4/4 pilot 选中 `preset-3`；执行优化形成新 SHA 后须重建同 SHA lock |
-| P4-12 | 三 seed 24-cell 机制矩阵与 GATE-4-MECH | IN_PROGRESS | 首次 run 完成 15/24 后 `RESOURCE_LIMIT / INCONCLUSIVE`；CR-004 保持科学协议不变并修复评估吞吐 |
+| P4-10 | CPU/MPS qualification 与独立 GATE-4-QUAL | IN_PROGRESS | v1 历史 Gate 已通过；v2 dirty-SHA CPU micro 8/8，仍须在提交后的同一 clean SHA 重建远程 CI、MPS qualification 与独立复审 |
+| P4-11 | 冻结 pilot 选择 | IN_PROGRESS | SHA `bcbbe9e2` 的 4/4 pilot 选中 `preset-2`；protocol-v2 新 SHA 必须重新生成同 SHA lock |
+| P4-12 | 三 seed 24-cell 机制矩阵与 GATE-4-MECH | IN_PROGRESS | v1 run 分别完成 15/24、8/24，均 `RESOURCE_LIMIT / INCONCLUSIVE`；CR-005 仅将机制预算修订为 48h，并增加阶段 heartbeat/cache 清理 |
 | P4-13 | 81-cell 正式矩阵与 GATE-4 | NOT_STARTED | 仅机制 Gate 通过后启动 |
 | P4-14 | GATE-NN-MVP-v2 与可选 network-mvp-v2 bundle | NOT_STARTED | 只有科学 Gate 通过才生成 bundle |
 | P4-15 | 版本升级 0.5.0 | NOT_STARTED | 仅 GATE-4 PASSED 后执行 |
+| P4-16 | 冻结 protocol-v2 的 mechanism 资源修订与阶段可观测性 | DONE | `CR-005`、48h 配置、evaluation/live-rollout heartbeat、cell 间 MPS cache 清理；不改变科学阈值 |

@@ -28,7 +28,7 @@ def _config(root: Path, *, run_id: str = "p4-test") -> P4SuiteConfig:
     return P4SuiteConfig.model_validate(
         {
             "schema_version": "p4-suite-v1",
-            "protocol_version": "p4-protocol-v1",
+            "protocol_version": "p4-protocol-v2",
             "profile": "qualification",
             "qualification_only": True,
             "device": "cpu",
@@ -329,7 +329,34 @@ def test_live_rollout_batch_is_separate_from_training_batch(tmp_path: Path) -> N
     assert qualification.budget.batch_size == 8
     assert p4_suite._live_rollout_batch_size(qualification, qualification.data.test) == 32
     assert mechanism.budget.batch_size == 64
+    assert mechanism.budget.wall_clock_hours == 48
     assert p4_suite._live_rollout_batch_size(mechanism, mechanism.data.test) == 1024
+
+
+def test_batched_rollout_reports_intra_view_progress(tmp_path: Path) -> None:
+    config = _config(tmp_path, run_id="rollout-progress")
+    cell = config.matrix()[0]
+    model, _ = p4_suite._build_model(config, cell, torch.device("cpu"))
+    task = cast(SmallGraphTask, p4_suite._task(config, "small_graph.v1"))
+    updates: list[tuple[int, int, int]] = []
+
+    records = p4_suite._rollout_records_with_chance(
+        model,
+        cell,
+        task,
+        "test",
+        4,
+        torch.device("cpu"),
+        batch_size=2,
+        deadline=time.perf_counter() + 120.0,
+        progress=lambda completed, total, turn: updates.append((completed, total, turn)),
+    )
+
+    assert len(records) == 4
+    assert updates
+    assert {total for _, total, _ in updates} == {4}
+    assert {completed for completed, _, _ in updates} == {0, 2}
+    assert all(turn >= 1 for _, _, turn in updates)
 
 
 def test_suite_emits_durable_structured_progress(
@@ -349,6 +376,49 @@ def test_suite_emits_durable_structured_progress(
     assert events.count("cell_started") == 8
     assert events.count("cell_completed") == 8
     assert events[-1] == "suite_finished"
+
+
+def test_suite_releases_device_cache_after_every_cell(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[str] = []
+    released: list[str] = []
+    _patch_fast_execution(monkeypatch, calls)
+    monkeypatch.setattr(
+        p4_suite,
+        "_release_device_cache",
+        lambda device: released.append(device.type),
+    )
+
+    result = p4_suite.run_p4_suite(_config(tmp_path, run_id="cache-release"))
+
+    assert result["status"] == "qualification_passed"
+    assert released == ["cpu"] * 8
+
+
+def test_phase_heartbeat_replaces_stale_training_cursor(tmp_path: Path) -> None:
+    config = _config(tmp_path, run_id="phase-heartbeat")
+    cell = config.matrix()[0]
+
+    p4_suite._write_phase_heartbeat(
+        tmp_path,
+        cell,
+        phase="live_rollout",
+        task_id="small_graph.v1",
+        split="ood",
+        distribution="topology",
+        completed=1024,
+        total=2048,
+        deadline=time.perf_counter() + 120.0,
+        turn=3,
+    )
+
+    heartbeat = json.loads((tmp_path / "heartbeat.json").read_text(encoding="utf-8"))
+    assert heartbeat["phase"] == "live_rollout"
+    assert heartbeat["distribution"] == "topology"
+    assert heartbeat["completed"] == 1024
+    assert heartbeat["total"] == 2048
+    assert heartbeat["turn"] == 3
 
 
 def test_pilot_never_enters_analysis_test_or_ood_evaluator(

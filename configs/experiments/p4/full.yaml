@@ -1,5 +1,5 @@
 schema_version: p4-suite-v1
-protocol_version: p4-protocol-v1
+protocol_version: p4-protocol-v2
 profile: full
 qualification_only: false
 device: mps

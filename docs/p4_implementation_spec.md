@@ -2,9 +2,9 @@
 title: P4 跨步预测闭环与语义稀疏路由实施规格
 status: ACCEPTED
 phase: P4
-protocol: p4-protocol-v1
+protocol: p4-protocol-v2
 target_release: 0.5.0
-last_updated: 2026-07-21
+last_updated: 2026-08-08
 ---
 
 # P4 跨步预测闭环与语义稀疏路由实施规格
@@ -55,7 +55,7 @@ P4 修订 P3 中未获得支持的预测因果路径和稀疏执行路径。确�
 |---|---:|---|---|
 | qualification | 8 | `7` / CPU micro + MPS | 缩小数据和步数验证 8 种 mechanism 路径、恢复、产物和数值健康；`qualification_only=true` |
 | pilot | 4 | `7` / MPS | 仅访问 train/validation，在四个冻结 preset 中选择一个；不产生正式统计 |
-| mechanism | 24 | `[17,29,43]` / MPS | 每 seed 8 cell，裁决预测闭环机制；累计墙钟上限 24 小时 |
+| mechanism | 24 | `[17,29,43]` / MPS | 每 seed 8 cell，裁决预测闭环机制；累计墙钟上限 48 小时 |
 | full | 81 | `[17,29,43]` / MPS | 24 个 mechanism cell 加 57 个网络比较 cell；累计墙钟上限 72 小时 |
 
 每个 seed 的 8 个 mechanism cell 固定为：full、retrained predictor-off、retrained loss-zero、retrained feedback-zero，以及 frozen-checkpoint acute-feedback-off、shuffle-forecast、dense-memory、legacy-capacity。故 mechanism 矩阵为 `8 × 3 = 24`。
@@ -94,4 +94,6 @@ pilot 的四个 preset 各执行 1,000 个三任务确定性 round-robin updates
 
 ## 版本规则
 
-`p4-protocol-v1` 冻结上述架构顺序、split seeds、训练 seeds、预算、preset、矩阵、比较 family、指标、阈值和统计方法。任何一项改变都必须建立新的 protocol version 和 change request，并保留本版本的运行与失败记录；不得对本协议或旧 Gate 进行结果驱动的回填。
+`p4-protocol-v2` 保持 v1 的架构顺序、split seeds、训练 seeds、样本量、训练预算、preset、矩阵、比较 family、指标、阈值和统计方法，只按 `CR-005` 将 mechanism 累计墙钟从 24 小时修订为 48 小时，并增加阶段 heartbeat 与 cell 间 MPS cache 清理。修订依据是两个 v1 run 的资源完整性证据，不读取或使用未完成 seed 的科学比较结果。
+
+`p4-protocol-v1` 的两次 mechanism run 永久保持 `RESOURCE_LIMIT / INCONCLUSIVE`，不得续接、拼接或纳入 v2 Gate。v2 必须从新的 clean SHA 重新建立 CI、qualification、pilot 和完整 24-cell mechanism 证据链。后续任何架构、数据、训练或科学裁决变更仍必须建立新的 protocol version 和 change request。

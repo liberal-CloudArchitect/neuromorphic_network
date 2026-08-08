@@ -96,7 +96,7 @@ class P4ExperimentCell(_StrictModel):
 
 class P4SuiteConfig(_StrictModel):
     schema_version: Literal["p4-suite-v1"] = "p4-suite-v1"
-    protocol_version: Literal["p4-protocol-v1"] = "p4-protocol-v1"
+    protocol_version: Literal["p4-protocol-v2"] = "p4-protocol-v2"
     profile: Literal["qualification", "pilot", "mechanism", "full"]
     qualification_only: bool
     device: Literal["auto", "cpu", "mps", "cuda"] = "auto"
@@ -151,7 +151,7 @@ class P4SuiteConfig(_StrictModel):
                 raise ValueError("formal P4 requires batch 64 and a frozen pilot preset")
             if self.qualification_report is None or self.pilot_lock is None:
                 raise ValueError("formal P4 requires qualification and pilot locks")
-            expected_hours = 24.0 if self.profile == "mechanism" else 72.0
+            expected_hours = 48.0 if self.profile == "mechanism" else 72.0
             if self.budget.wall_clock_hours != expected_hours:
                 raise ValueError(
                     f"{self.profile} wall-clock budget must be {expected_hours:g} hours"

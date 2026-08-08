@@ -1,7 +1,7 @@
 ---
 gate: GATE-4
 status: NOT_RUN
-protocol: p4-protocol-v1
+protocol: p4-protocol-v2
 template: true
 last_updated: 2026-07-21
 ---

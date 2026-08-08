@@ -135,5 +135,9 @@ last_updated: 2026-07-15
 - `PILOT-P4-001`：clean SHA `fb53443ac65948317f840092dccbed7b71badebe` 的 4-cell MPS pilot `p4-pilot-fb53443a-20260722T120059Z` 完成 4/4，按冻结 eligibility 与 validation 排序选中 `preset-3`（lr `3e-4`、temporal loss weight `0.1`、weight decay `1e-2`）。
 - `LIMIT-P4-MECH-001`：同一 SHA 的首次机制 run `p4-mechanism-fb53443a-20260722T160041Z` 在 `86,887.18 s` 停止；完成 15/24、失败 0、checksum 有效，但缺 seed 29 最后一个控制及全部 seed 43，因此只能记为 `RESOURCE_LIMIT / INCONCLUSIVE`，不生成机制锁。
 - `ENG-P4-EXEC-001`：`CR-004` 冻结 execution-only 修复：SmallGraph episode 批量执行并增加 JSONL 进度日志，不改变样本、seed、训练 batch、预算、阈值或统计。MPS 的 batch `64/128/256/512/1024` 逐样本结果一致；inference-only batch `1024` 达到约 `52.6 samples/s`。任何新 SHA 仍须重建 CI、qualification 和 pilot lock。
+- `QUAL-P4-MPS-002`：clean SHA `bcbbe9e2492c6483f56050562032ae61111395d5` 的 MPS qualification `p4-qualification-bcbbe9e2-20260726T154126Z` 完成 8/8、34 个登记产物、4,864 条记录且 checksum 全部有效；只证明 CR-004 的执行路径。
+- `PILOT-P4-002`：同一 SHA 的 4-cell pilot `p4-pilot-bcbbe9e2-20260726T155005Z` 完成 4/4，按冻结规则选中 `preset-2`（lr `3e-4`、temporal loss weight `0.05`、weight decay `1e-2`）。
+- `LIMIT-P4-MECH-002`：同一 SHA 的第二次 mechanism `p4-mechanism-bcbbe9e2-20260727T044447Z` 在 `86,953.05 s` 停止；完成 seed 17 全部八个 cell，合计 `44,080.27 s`，总计 8/24、失败 0、checksum 有效。24h 即使排除后续疑似系统挂起也不足以覆盖三个 seed，结论仍为 `RESOURCE_LIMIT / INCONCLUSIVE`。
+- `PROTO-P4-002`：`CR-005` 建立 `p4-protocol-v2`，只将 mechanism 累计墙钟调整为 48h，并加入 evaluation heartbeat 与 cell 间 MPS cache 清理；架构、数据、seed、训练预算、矩阵、统计与科学阈值均保持不变。v1 产物不得续接或拼入 v2 Gate。
 
 P4 的新 SHA pilot、正式机制与完整矩阵仍须在对应报告中另行登记。当前不得授予 network-mvp-v2 标签，也不得把 qualification、旧 pilot 或不完整机制指标解释为科学收益。

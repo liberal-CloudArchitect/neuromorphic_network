@@ -1,5 +1,5 @@
 schema_version: p4-suite-v1
-protocol_version: p4-protocol-v1
+protocol_version: p4-protocol-v2
 profile: mechanism
 qualification_only: false
 device: mps
@@ -21,7 +21,7 @@ budget:
   checkpoint_interval: 100
   patience: 10
   min_delta: 0.001
-  wall_clock_hours: 24
+  wall_clock_hours: 48
   bootstrap_samples: 10000
 optimizer:
   learning_rate: 0.0003

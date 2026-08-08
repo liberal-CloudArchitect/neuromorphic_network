@@ -1,0 +1,18 @@
+{
+  "checksums_ok": true,
+  "completed_cells": 8,
+  "failed_cells": 0,
+  "git_commit": "bcbbe9e2492c6483f56050562032ae61111395d5",
+  "protocol_version": "p4-protocol-v1",
+  "registered_artifacts": 35,
+  "remaining_cells": 15,
+  "resource_limited_cells": 1,
+  "run_id": "p4-mechanism-bcbbe9e2-20260727T044447Z",
+  "sample_records": 274432,
+  "seed17_completed_cell_seconds": 44080.27228325023,
+  "seed17_control_seconds": 9129.996342251194,
+  "seed17_training_seconds": 34950.27594099904,
+  "seed17_training_steps": 12600,
+  "status": "RESOURCE_LIMIT_INCONCLUSIVE",
+  "wall_clock_seconds": 86953.05216058297
+}

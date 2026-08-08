@@ -78,7 +78,7 @@ P4 不改写 P1～P3 数据或结论，使用独立 task versions 和 split seed
 
 - qualification：seed `7`，样本 `64/32/32/32/32`，八个机制/控制 cell；只验证路径、恢复、观测和产物。
 - pilot：四个预注册候选，`lr ∈ {1e-4,3e-4}`、temporal loss weight `∈ {0.05,0.1}`、weight decay `1e-2`；只用 train/validation。
-- mechanism：seeds `[17,29,43]`，每 seed 八个 cell，共 24 个；墙钟上限 24 小时。
+- mechanism：seeds `[17,29,43]`，每 seed 八个 cell，共 24 个；`p4-protocol-v2` 墙钟上限 48 小时。v1 的 24 小时上限已由 `CR-005` 因两次资源停止退役，不改变任何科学阈值。
 - full：机制 24 cells 加 57 cells，共 81；数据 `8192/2048/512/2048/2048`，每任务最多 5,000 updates，总墙钟不超过 72 小时。
 
 正式执行必须按 qualification → pilot → mechanism → full 顺序使用同一 clean SHA 的锁。机制 Gate 未通过时 full 必须拒绝启动。完整定义、干预和冻结阈值见 `docs/p4_implementation_spec.md`。

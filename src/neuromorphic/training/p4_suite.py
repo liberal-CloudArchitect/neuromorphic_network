@@ -8,13 +8,14 @@ summary write have all succeeded.
 
 from __future__ import annotations
 
+import gc
 import hashlib
 import json
 import math
 import shutil
 import subprocess
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -113,6 +114,48 @@ def _emit_progress(event: str, **fields: object) -> None:
         ),
         flush=True,
     )
+
+
+def _write_phase_heartbeat(
+    suite_directory: Path,
+    cell: P4ExperimentCell,
+    *,
+    phase: str,
+    task_id: str,
+    split: str,
+    distribution: str,
+    completed: int,
+    total: int,
+    deadline: float,
+    turn: int | None = None,
+) -> None:
+    """Expose evaluation progress instead of leaving a stale training heartbeat."""
+
+    payload: dict[str, object] = {
+        "cell_id": cell.cell_id,
+        "seed": cell.seed,
+        "phase": phase,
+        "task_id": task_id,
+        "split": split,
+        "distribution": distribution,
+        "completed": completed,
+        "total": total,
+        "updated_at": datetime.now(UTC).isoformat(),
+        "free_bytes": shutil.disk_usage(suite_directory).free,
+        "remaining_wall_clock_seconds": max(deadline - time.perf_counter(), 0.0),
+    }
+    if turn is not None:
+        payload["turn"] = turn
+    _write_json(suite_directory / "heartbeat.json", payload)
+
+
+def _release_device_cache(device: torch.device) -> None:
+    """Release cell-local objects and accelerator cache between long formal cells."""
+
+    gc.collect()
+    if device.type == "mps" and torch.backends.mps.is_available():
+        torch.mps.synchronize()
+        torch.mps.empty_cache()
 
 
 def _select_network_state(state: NetworkState, indices: Tensor) -> NetworkState:
@@ -901,6 +944,7 @@ def _rollout_records_with_chance(
     *,
     batch_size: int,
     deadline: float,
+    progress: Callable[[int, int, int], None] | None = None,
 ) -> list[dict[str, object]]:
     """Run independent graph episodes in fixed-size batches.
 
@@ -1041,6 +1085,8 @@ def _rollout_records_with_chance(
                 else:
                     invalid[index] += 1
             turn += 1
+            if progress is not None:
+                progress(chunk_start, size, turn)
         for index, (sample_index, graph) in enumerate(zip(sample_indices, graphs, strict=True)):
             chance = small_graph_chance_level(
                 graph.adjacency.numpy(),
@@ -1172,6 +1218,7 @@ def _evaluate_cell(
     config: P4SuiteConfig,
     device: torch.device,
     directory: Path,
+    suite_directory: Path,
     deadline: float,
 ) -> dict[str, object]:
     if cell.cell_type == "pilot":
@@ -1221,13 +1268,34 @@ def _evaluate_cell(
                 for name, value in current_routing.items():
                     route_total[name] = route_total.get(name, 0.0) + value
                 _merge_prediction(prediction_total, _prediction_stats(output))
+                _write_phase_heartbeat(
+                    suite_directory,
+                    cell,
+                    phase="evaluation",
+                    task_id=task_id,
+                    split=split,
+                    distribution=distribution,
+                    completed=min(start + len(indices), size),
+                    total=size,
+                    deadline=deadline,
+                )
             records.extend(view)
             task_views[f"{split}:{distribution}"] = len(view)
+            _emit_progress(
+                "evaluation_view_completed",
+                cell_id=cell.cell_id,
+                task_id=task_id,
+                split=split,
+                distribution=distribution,
+                records=len(view),
+            )
             if split == "test":
                 scores[task_id] = _mean_primary_records(task_id, view)
         for distribution in _OOD_DISTRIBUTIONS[task_id]:
             task = _task(config, task_id, distribution)
             for start in range(0, config.data.ood, config.budget.batch_size):
+                if time.perf_counter() >= deadline:
+                    raise P4ResourceLimit("P4 wall-clock budget exhausted during evaluation")
                 indices = list(range(start, min(start + config.budget.batch_size, config.data.ood)))
                 batch = task.generate("ood", indices, device=device)
                 with torch.no_grad():
@@ -1242,8 +1310,48 @@ def _evaluate_cell(
                     item["schema_version"] = "p4-evaluation-sample-v1"
                     item["namespace"] = "p4"
                     records.append(item)
+                _write_phase_heartbeat(
+                    suite_directory,
+                    cell,
+                    phase="evaluation",
+                    task_id=task_id,
+                    split="ood",
+                    distribution=distribution,
+                    completed=min(start + len(indices), config.data.ood),
+                    total=config.data.ood,
+                    deadline=deadline,
+                )
             task_views[f"ood:{distribution}"] = config.data.ood
+            _emit_progress(
+                "evaluation_view_completed",
+                cell_id=cell.cell_id,
+                task_id=task_id,
+                split="ood",
+                distribution=distribution,
+                records=config.data.ood,
+            )
             if task_id == "small_graph.v1":
+
+                def ood_rollout_progress(
+                    completed: int,
+                    total: int,
+                    turn: int,
+                    distribution_id: str = distribution,
+                    rollout_task_id: str = task_id,
+                ) -> None:
+                    _write_phase_heartbeat(
+                        suite_directory,
+                        cell,
+                        phase="live_rollout",
+                        task_id=rollout_task_id,
+                        split="ood",
+                        distribution=distribution_id,
+                        completed=completed,
+                        total=total,
+                        deadline=deadline,
+                        turn=turn,
+                    )
+
                 rollout = _rollout_records_with_chance(
                     model,
                     cell,
@@ -1253,11 +1361,40 @@ def _evaluate_cell(
                     device,
                     batch_size=_live_rollout_batch_size(config, config.data.ood),
                     deadline=deadline,
+                    progress=ood_rollout_progress,
                 )
                 records.extend(rollout)
                 task_views[f"ood:{distribution}:live_rollout"] = len(rollout)
+                _emit_progress(
+                    "evaluation_view_completed",
+                    cell_id=cell.cell_id,
+                    task_id=task_id,
+                    split="ood-live-rollout",
+                    distribution=distribution,
+                    records=len(rollout),
+                )
         if task_id == "small_graph.v1":
             task = cast(SmallGraphTask, _task(config, task_id))
+
+            def test_rollout_progress(
+                completed: int,
+                total: int,
+                turn: int,
+                rollout_task_id: str = task_id,
+            ) -> None:
+                _write_phase_heartbeat(
+                    suite_directory,
+                    cell,
+                    phase="live_rollout",
+                    task_id=rollout_task_id,
+                    split="test",
+                    distribution="v1",
+                    completed=completed,
+                    total=total,
+                    deadline=deadline,
+                    turn=turn,
+                )
+
             rollout = _rollout_records_with_chance(
                 model,
                 cell,
@@ -1267,9 +1404,18 @@ def _evaluate_cell(
                 device,
                 batch_size=_live_rollout_batch_size(config, config.data.test),
                 deadline=deadline,
+                progress=test_rollout_progress,
             )
             records.extend(rollout)
             task_views["test:v1:live_rollout"] = len(rollout)
+            _emit_progress(
+                "evaluation_view_completed",
+                cell_id=cell.cell_id,
+                task_id=task_id,
+                split="test-live-rollout",
+                distribution="v1",
+                records=len(rollout),
+            )
             scores[task_id] = sum(_numeric(item, "success_rate") for item in rollout) / len(rollout)
         views[task_id] = task_views
         routing_summary = {**route_total, **_optional_mac_profile(model, route_total)}
@@ -2026,6 +2172,7 @@ def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
             total_cells=len(entries),
             max_steps=cell.max_steps,
         )
+        model: nn.Module | None = None
         try:
             cell_started = time.perf_counter()
             model, matching = _build_model(config, cell, device)
@@ -2078,7 +2225,15 @@ def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
                     "telemetry_v2_events": 0,
                 }
             else:
-                evaluation = _evaluate_cell(model, cell, config, device, cell_directory, deadline)
+                evaluation = _evaluate_cell(
+                    model,
+                    cell,
+                    config,
+                    device,
+                    cell_directory,
+                    directory,
+                    deadline,
+                )
             summary = {
                 "schema_version": "p4-cell-summary-v1",
                 "cell": cell.model_dump(mode="json"),
@@ -2139,6 +2294,10 @@ def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
                 error_type=type(error).__name__,
                 error=str(error),
             )
+        finally:
+            if model is not None:
+                del model
+            _release_device_cache(device)
         persist()
     statuses = [entry["status"] for entry in entries]
     if all(status == "COMPLETED" for status in statuses):
