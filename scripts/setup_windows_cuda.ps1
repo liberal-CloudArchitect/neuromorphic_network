@@ -39,6 +39,13 @@ if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) {
     }
 }
 
+$env:PATH = @(
+    $EnvironmentPrefix,
+    (Join-Path $EnvironmentPrefix "Scripts"),
+    (Join-Path $EnvironmentPrefix "Library\bin"),
+    $env:PATH
+) -join ";"
+
 & $Python -m pip install --upgrade pip
 & $Python -m pip install "torch==2.12.1" --index-url $TorchIndexUrl
 & $Python -m pip install --editable "${ProjectRoot}[dev]"

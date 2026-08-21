@@ -16,6 +16,14 @@ if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) {
     exit 2
 }
 
+$EnvironmentRoot = Split-Path -Parent $Python
+$env:PATH = @(
+    $EnvironmentRoot,
+    (Join-Path $EnvironmentRoot "Scripts"),
+    (Join-Path $EnvironmentRoot "Library\bin"),
+    $env:PATH
+) -join ";"
+
 Set-Location -LiteralPath $Root
 & $Python "scripts/p4_control.py" @Arguments
 exit $LASTEXITCODE
