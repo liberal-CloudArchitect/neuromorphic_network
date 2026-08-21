@@ -224,6 +224,7 @@ def test_launch_spec_uses_platform_detached_flags_on_windows(
         "runtime.yaml",
     ]
     assert spec["creationflags"] != 0
+    assert int(spec["creationflags"]) & 0x01000000
 
 
 def test_alive_uses_get_process_on_windows(monkeypatch: pytest.MonkeyPatch) -> None:

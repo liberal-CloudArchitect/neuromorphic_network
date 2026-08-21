@@ -291,7 +291,8 @@ def _launch_spec(runtime_config: Path) -> dict[str, object]:
         return {
             "command": runner,
             "creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
-            | getattr(subprocess, "DETACHED_PROCESS", 0x00000008),
+            | getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+            | getattr(subprocess, "CREATE_BREAKAWAY_FROM_JOB", 0x01000000),
             "start_new_session": False,
         }
     return {
