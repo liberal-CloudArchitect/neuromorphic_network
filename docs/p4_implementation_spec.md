@@ -96,4 +96,10 @@ pilot 的四个 preset 各执行 1,000 个三任务确定性 round-robin updates
 
 `p4-protocol-v2` 保持 v1 的架构顺序、split seeds、训练 seeds、样本量、训练预算、preset、矩阵、比较 family、指标、阈值和统计方法，只按 `CR-005` 将 mechanism 累计墙钟从 24 小时修订为 48 小时，并增加阶段 heartbeat 与 cell 间 MPS cache 清理。修订依据是两个 v1 run 的资源完整性证据，不读取或使用未完成 seed 的科学比较结果。
 
+### 执行隔离增补（CR-006）
+
+`CR-006` 不修改上述科学协议。正式 accelerator suite 采用 supervisor/worker：训练按 cell 隔离进程，标准评估按 task 隔离进程，SmallGraph 的 test 与三个 OOD live rollout 分别隔离。worker 只在 config、matrix、protocol、checkpoint 和产物 checksum 一致时复用已完成结果；cell summary 只能由完整分区合并生成。该边界用于限制 MPSGraph 进程级缓存和保存可恢复评估证据，不改变 active-row 算法、模型 MAC 或指标。
+
+Windows/CUDA 配置当前仅用于工程资格验证。正式 P4 Gate 继续遵循冻结的 MPS 证据链；CUDA 若进入科学比较，必须建立新的设备协议与容差，不得直接替换 MPS 结果。
+
 `p4-protocol-v1` 的两次 mechanism run 永久保持 `RESOURCE_LIMIT / INCONCLUSIVE`，不得续接、拼接或纳入 v2 Gate。v2 必须从新的 clean SHA 重新建立 CI、qualification、pilot 和完整 24-cell mechanism 证据链。后续任何架构、数据、训练或科学裁决变更仍必须建立新的 protocol version 和 change request。

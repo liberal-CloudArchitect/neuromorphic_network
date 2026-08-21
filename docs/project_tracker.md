@@ -92,3 +92,4 @@ last_updated: 2026-07-26
 | P4-14 | GATE-NN-MVP-v2 与可选 network-mvp-v2 bundle | NOT_STARTED | 只有科学 Gate 通过才生成 bundle |
 | P4-15 | 版本升级 0.5.0 | NOT_STARTED | 仅 GATE-4 PASSED 后执行 |
 | P4-16 | 冻结 protocol-v2 的 mechanism 资源修订与阶段可观测性 | DONE | `CR-005`、48h 配置、evaluation/live-rollout heartbeat、cell 间 MPS cache 清理；不改变科学阈值 |
+| P4-17 | 隔离 accelerator worker、持久化评估分区并建立 Windows/CUDA 工程验证路径 | IN_PROGRESS | `CR-006`；待 clean-SHA 本地 MPS、RTX 4060 CUDA 与远程 CI 证据闭环 |

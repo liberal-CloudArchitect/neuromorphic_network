@@ -2431,14 +2431,18 @@ def _run_isolated_evaluation(
         cast(str, entry["partition_id"]): entry
         for entry in cast(list[dict[str, Any]], registry.get("partitions", []))
     }
+    for partition_id, _ in specifications:
+        entries.setdefault(
+            partition_id,
+            {"partition_id": partition_id, "status": "PENDING", "attempts": []},
+        )
+    registry["partitions"] = [entries[name] for name, _ in specifications]
+    _write_json(registry_path, registry)
     parts: list[dict[str, Any]] = []
     for partition_id, arguments in specifications:
         part_directory = evaluation_root / partition_id
         result_path = part_directory / "result.json"
-        entry = entries.setdefault(
-            partition_id,
-            {"partition_id": partition_id, "status": "PENDING", "attempts": []},
-        )
+        entry = entries[partition_id]
         entry["status"] = "RUNNING"
         cast(list[dict[str, object]], entry["attempts"]).append(
             {"started_at": datetime.now(UTC).isoformat()}
@@ -2458,6 +2462,13 @@ def _run_isolated_evaluation(
                     str(part_directory),
                 ],
             )
+        except P4ResourceLimit:
+            entry["status"] = "RESOURCE_LIMIT"
+            cast(list[dict[str, object]], entry["attempts"])[-1].update(
+                {"completed_at": datetime.now(UTC).isoformat(), "result": "RESOURCE_LIMIT"}
+            )
+            _write_json(registry_path, registry)
+            raise
         except BaseException:
             entry["status"] = "FAILED"
             cast(list[dict[str, object]], entry["attempts"])[-1].update(

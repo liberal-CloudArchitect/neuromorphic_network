@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neuromorphic.invalid/schemas/p4-evaluation-registry-v1.json",
+  "title": "P4 evaluation partition registry v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "cell_id",
+    "config_hash",
+    "matrix_hash",
+    "protocol_hash",
+    "partitions"
+  ],
+  "properties": {
+    "schema_version": {"const": "p4-evaluation-registry-v1"},
+    "cell_id": {"type": "string", "minLength": 1},
+    "config_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "matrix_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "protocol_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "partitions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["partition_id", "status", "attempts"],
+        "properties": {
+          "partition_id": {"type": "string", "minLength": 1},
+          "status": {"enum": ["PENDING", "RUNNING", "COMPLETED", "FAILED", "RESOURCE_LIMIT"]},
+          "result_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "attempts": {"type": "array"}
+        }
+      }
+    }
+  }
+}

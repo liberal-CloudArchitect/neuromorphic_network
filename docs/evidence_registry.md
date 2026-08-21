@@ -139,5 +139,6 @@ last_updated: 2026-07-15
 - `PILOT-P4-002`：同一 SHA 的 4-cell pilot `p4-pilot-bcbbe9e2-20260726T155005Z` 完成 4/4，按冻结规则选中 `preset-2`（lr `3e-4`、temporal loss weight `0.05`、weight decay `1e-2`）。
 - `LIMIT-P4-MECH-002`：同一 SHA 的第二次 mechanism `p4-mechanism-bcbbe9e2-20260727T044447Z` 在 `86,953.05 s` 停止；完成 seed 17 全部八个 cell，合计 `44,080.27 s`，总计 8/24、失败 0、checksum 有效。24h 即使排除后续疑似系统挂起也不足以覆盖三个 seed，结论仍为 `RESOURCE_LIMIT / INCONCLUSIVE`。
 - `PROTO-P4-002`：`CR-005` 建立 `p4-protocol-v2`，只将 mechanism 累计墙钟调整为 48h，并加入 evaluation heartbeat 与 cell 间 MPS cache 清理；架构、数据、seed、训练预算、矩阵、统计与科学阈值均保持不变。v1 产物不得续接或拼入 v2 Gate。
+- `ENG-P4-EXEC-002`：`CR-006` 冻结 execution-only 的 supervisor/worker 边界：训练按 cell、标准评估按 task、SmallGraph live rollout 按 view 隔离进程，并用原子 worker result、evaluation registry 与 checksum 实现分区级恢复。CUDA qualification 只作为工程验证，不替代正式 MPS Gate。
 
 P4 的新 SHA pilot、正式机制与完整矩阵仍须在对应报告中另行登记。当前不得授予 network-mvp-v2 标签，也不得把 qualification、旧 pilot 或不完整机制指标解释为科学收益。

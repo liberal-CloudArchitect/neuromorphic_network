@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neuromorphic.invalid/schemas/p4-worker-result-v1.json",
+  "title": "P4 isolated worker result v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "status",
+    "stage",
+    "cell_id"
+  ],
+  "properties": {
+    "schema_version": {"const": "p4-worker-result-v1"},
+    "status": {"enum": ["COMPLETED", "STOPPED", "RESOURCE_LIMIT", "FAILED"]},
+    "stage": {"enum": ["train", "standard", "rollout", "evaluate-standard", "evaluate-rollout"]},
+    "cell_id": {"type": "string", "minLength": 1},
+    "config_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "matrix_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "protocol_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "checkpoint_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+    },
+    "error": {"type": "object"}
+  }
+}

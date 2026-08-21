@@ -581,6 +581,68 @@ def test_isolated_standard_evaluation_loads_frozen_checkpoint(tmp_path: Path) ->
     }
 
 
+def test_isolated_evaluation_preregisters_every_partition(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _config(tmp_path, run_id="evaluation-registry")
+    cell = config.matrix()[0]
+    suite_directory = tmp_path / "evaluation-registry"
+    cell_directory = suite_directory / "cells" / cell.cell_id
+
+    def fake_worker(
+        config: P4SuiteConfig,
+        cell: Any,
+        *,
+        suite_directory: Path,
+        result_path: Path,
+        deadline: float,
+        arguments: list[str],
+    ) -> dict[str, Any]:
+        del config, suite_directory, deadline
+        artifact_directory = Path(arguments[arguments.index("--artifact-directory") + 1])
+        artifact_directory.mkdir(parents=True, exist_ok=True)
+        (artifact_directory / "sample_records.jsonl").write_text("", encoding="utf-8")
+        (artifact_directory / "telemetry-v2.jsonl").write_text("", encoding="utf-8")
+        task_id = arguments[arguments.index("--task-id") + 1]
+        result = {
+            "schema_version": "p4-worker-result-v1",
+            "status": "COMPLETED",
+            "stage": arguments[arguments.index("--stage") + 1],
+            "cell_id": cell.cell_id,
+            "evaluation": {
+                "record_count": 0,
+                "views": {task_id: {}},
+                "routing": {},
+                "prediction": {},
+                "scores": {task_id: 0.0},
+                "telemetry_v2_events": 0,
+            },
+        }
+        p4_suite._write_json(result_path, result)
+        return result
+
+    monkeypatch.setattr(p4_suite, "_run_worker", fake_worker)
+
+    result = p4_suite._run_isolated_evaluation(
+        config,
+        cell,
+        suite_directory=suite_directory,
+        cell_directory=cell_directory,
+        deadline=time.perf_counter() + 30.0,
+    )
+
+    assert result["record_count"] == 0
+    registry = json.loads((cell_directory / "evaluation-registry.json").read_text(encoding="utf-8"))
+    assert len(registry["partitions"]) == 7
+    assert all(partition["status"] == "COMPLETED" for partition in registry["partitions"])
+    schema = json.loads(
+        (Path(__file__).parents[2] / "schemas" / "p4-evaluation-registry-v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    jsonschema.validate(registry, schema)
+
+
 def test_pilot_never_enters_analysis_test_or_ood_evaluator(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
