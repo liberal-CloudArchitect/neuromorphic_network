@@ -7,6 +7,7 @@ import io
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -223,6 +224,22 @@ def test_launch_spec_uses_platform_detached_flags_on_windows(
         "runtime.yaml",
     ]
     assert spec["creationflags"] != 0
+
+
+def test_alive_uses_get_process_on_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> SimpleNamespace:
+        del kwargs
+        calls.append(command)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(control.sys, "platform", "win32", raising=False)
+    monkeypatch.setattr(control.subprocess, "run", fake_run)
+
+    assert control._alive(12_484) is True
+    assert calls[0][:3] == ["powershell", "-NoProfile", "-Command"]
+    assert "12484" in calls[0][3]
 
 
 def test_cuda_qualification_profile_uses_engineering_cuda_config() -> None:

@@ -71,6 +71,19 @@ def _git(*arguments: str) -> str:
 
 
 def _alive(pid: int) -> bool:
+    if sys.platform == "win32":
+        inspected = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                f"if (Get-Process -Id {pid} -ErrorAction SilentlyContinue) "
+                "{ exit 0 } else { exit 1 }",
+            ],
+            check=False,
+            capture_output=True,
+        )
+        return inspected.returncode == 0
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
