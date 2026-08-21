@@ -225,6 +225,15 @@ def test_launch_spec_uses_platform_detached_flags_on_windows(
     assert spec["creationflags"] != 0
 
 
+def test_cuda_qualification_profile_uses_engineering_cuda_config() -> None:
+    config = control._profile_config("cuda-qualification")
+
+    assert config.profile == "qualification"
+    assert config.qualification_only is True
+    assert config.device == "cuda"
+    assert str(config.control_root).replace("\\", "/").endswith("artifacts/p4-cuda/control")
+
+
 def test_start_requires_mechanism_lock_for_full(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

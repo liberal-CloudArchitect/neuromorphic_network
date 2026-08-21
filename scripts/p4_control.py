@@ -31,11 +31,12 @@ CURRENT = CONTROL / "current.json"
 
 PROFILE_CONFIGS: dict[str, Path] = {
     "qualification": ROOT / "configs/experiments/p4/qualification.yaml",
+    "cuda-qualification": ROOT / "configs/experiments/p4/cuda-qualification.yaml",
     "pilot": ROOT / "configs/experiments/p4/pilot.yaml",
     "mechanism": ROOT / "configs/experiments/p4/mechanism.yaml",
     "full": ROOT / "configs/experiments/p4/full.yaml",
 }
-PROFILE = Literal["qualification", "pilot", "mechanism", "full"]
+PROFILE = Literal["qualification", "cuda-qualification", "pilot", "mechanism", "full"]
 TERMINAL_STATUSES = {
     "qualification_passed",
     "pilot_passed",
@@ -350,7 +351,7 @@ def _launch(runtime_config: Path, run_id: str, *, resumed: bool) -> dict[str, An
 
 
 def _run_foreground(runtime_config: Path, *, profile: PROFILE, run_id: str) -> dict[str, Any]:
-    if profile != "qualification":
+    if profile not in {"qualification", "cuda-qualification"}:
         raise RuntimeError("foreground mode is only allowed for qualification")
     command = [sys.executable, "-m", "neuromorphic.training.run", "--config", str(runtime_config)]
     completed = subprocess.run(command, cwd=ROOT, check=False)
@@ -368,7 +369,7 @@ def _run_foreground(runtime_config: Path, *, profile: PROFILE, run_id: str) -> d
 
 def start(profile: PROFILE, *, foreground: bool = False) -> dict[str, Any]:
     if foreground:
-        if profile != "qualification":
+        if profile not in {"qualification", "cuda-qualification"}:
             raise RuntimeError("foreground mode is only allowed for qualification")
         head = _git("rev-parse", "HEAD")
         runtime, run_id = _prepare_runtime(profile, head=head)
@@ -378,8 +379,9 @@ def start(profile: PROFILE, *, foreground: bool = False) -> dict[str, Any]:
     runtime, run_id = _prepare_runtime(profile, head=head)
     launch = _launch(runtime, run_id, resumed=False)
     launch["phase"] = profile
-    launch["status_command"] = "./scripts/p4_run.sh status"
-    launch["logs_command"] = "./scripts/p4_run.sh logs"
+    entrypoint = ".\\scripts\\p4_run.ps1" if sys.platform == "win32" else "./scripts/p4_run.sh"
+    launch["status_command"] = f"{entrypoint} status"
+    launch["logs_command"] = f"{entrypoint} logs"
     return launch
 
 
