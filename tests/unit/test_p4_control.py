@@ -65,6 +65,166 @@ def test_status_uses_cumulative_heartbeat_after_resume(
     assert result["remaining_wall_clock_seconds"] == pytest.approx(7_080.0)
 
 
+def test_terminal_resource_limit_reports_restart_not_resume(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(control, "ROOT", tmp_path)
+    current_path = tmp_path / "artifacts/p4/control/current.json"
+    monkeypatch.setattr(control, "CURRENT", current_path)
+    runtime = tmp_path / "runtime.yaml"
+    raw = yaml.safe_load(
+        Path("configs/experiments/p4/qualification.yaml").read_text(encoding="utf-8")
+    )
+    runtime.write_text(yaml.safe_dump(raw), encoding="utf-8")
+    artifact_directory = tmp_path / "artifacts/runs/run"
+    _write_json(
+        artifact_directory / "registry.json",
+        {
+            "status": "resource_limit",
+            "wall_clock_seconds": 7_200.0,
+            "ended_at": "2026-08-22T00:00:00+00:00",
+            "cells": [
+                {"cell_id": "done", "status": "COMPLETED"},
+                {"cell_id": "partial", "status": "RESOURCE_LIMIT"},
+                {"cell_id": "pending", "status": "PENDING"},
+            ],
+        },
+    )
+    _write_json(
+        current_path,
+        {
+            "run_id": "run",
+            "pid": 987_654,
+            "started_at": "2026-08-22T00:00:00+00:00",
+            "prior_wall_clock_seconds": 7_200.0,
+            "runtime_config": "runtime.yaml",
+            "artifact_dir": "artifacts/runs/run",
+        },
+    )
+    monkeypatch.setattr(control, "_alive", lambda pid: False)
+    monkeypatch.setattr(control, "_process_matches_launch", lambda current: False)
+
+    result = control.status()
+
+    assert result["terminal"] is True
+    assert result["resume_allowed"] is False
+    assert result["retryable_cells"] == 0
+    assert result["restart_required_cells"] == 2
+    assert result["incomplete_cells"] == ["partial", "pending"]
+
+
+def test_status_marks_terminal_run_as_not_resumable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(control, "ROOT", tmp_path)
+    current_path = tmp_path / "artifacts/p4/control/current.json"
+    monkeypatch.setattr(control, "CURRENT", current_path)
+    runtime = tmp_path / "artifacts/p4/control/run/pilot.runtime.yaml"
+    raw = yaml.safe_load(Path("configs/experiments/p4/pilot.yaml").read_text(encoding="utf-8"))
+    runtime.parent.mkdir(parents=True)
+    runtime.write_text(yaml.safe_dump(raw), encoding="utf-8")
+    artifact_directory = tmp_path / "artifacts/runs/run"
+    ended_at = datetime.now(UTC).isoformat()
+    _write_json(
+        artifact_directory / "registry.json",
+        {
+            "status": "pilot_passed",
+            "cells": [],
+            "wall_clock_seconds": 75.0,
+            "ended_at": ended_at,
+        },
+    )
+    _write_json(
+        artifact_directory / "heartbeat.json",
+        {
+            "suite_elapsed_seconds": 70.0,
+            "updated_at": (datetime.now(UTC) - timedelta(minutes=10)).isoformat(),
+        },
+    )
+    _write_json(
+        current_path,
+        {
+            "run_id": "run",
+            "pid": 987_654,
+            "started_at": (datetime.now(UTC) - timedelta(seconds=10)).isoformat(),
+            "prior_wall_clock_seconds": 50.0,
+            "runtime_config": str(runtime.relative_to(tmp_path)),
+            "artifact_dir": str(artifact_directory.relative_to(tmp_path)),
+        },
+    )
+    monkeypatch.setattr(control, "_alive", lambda pid: False)
+    monkeypatch.setattr(control, "_process_matches_launch", lambda current: False)
+
+    result = control.status()
+
+    assert result["terminal"] is True
+    assert result["resume_allowed"] is False
+    assert result["terminal_reason"] == "pilot_passed"
+    assert result["ended_at"] == ended_at
+    assert result["heartbeat_stale"] is True
+
+
+def test_status_marks_stopped_dead_run_as_resumable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(control, "ROOT", tmp_path)
+    current_path = tmp_path / "artifacts/p4/control/current.json"
+    monkeypatch.setattr(control, "CURRENT", current_path)
+    runtime = tmp_path / "artifacts/p4/control/run/mechanism.runtime.yaml"
+    raw = yaml.safe_load(Path("configs/experiments/p4/mechanism.yaml").read_text(encoding="utf-8"))
+    runtime.parent.mkdir(parents=True)
+    runtime.write_text(yaml.safe_dump(raw), encoding="utf-8")
+    artifact_directory = tmp_path / "artifacts/runs/run"
+    _write_json(
+        artifact_directory / "registry.json",
+        {"status": "stopped", "cells": [], "wall_clock_seconds": 75.0},
+    )
+    _write_json(
+        artifact_directory / "heartbeat.json",
+        {
+            "suite_elapsed_seconds": 75.0,
+            "updated_at": (datetime.now(UTC) - timedelta(minutes=10)).isoformat(),
+        },
+    )
+    _write_json(
+        current_path,
+        {
+            "run_id": "run",
+            "pid": 987_654,
+            "started_at": (datetime.now(UTC) - timedelta(seconds=10)).isoformat(),
+            "prior_wall_clock_seconds": 50.0,
+            "runtime_config": str(runtime.relative_to(tmp_path)),
+            "artifact_dir": str(artifact_directory.relative_to(tmp_path)),
+        },
+    )
+    monkeypatch.setattr(control, "_alive", lambda pid: False)
+    monkeypatch.setattr(control, "_process_matches_launch", lambda current: False)
+
+    result = control.status()
+
+    assert result["terminal"] is False
+    assert result["resume_allowed"] is True
+    assert result["terminal_reason"] == "stopped"
+    assert result["heartbeat_stale"] is True
+
+
+def test_launch_spec_uses_platform_detached_flags_on_windows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(control.sys, "platform", "win32", raising=False)
+
+    spec = control._launch_spec(Path("runtime.yaml"))
+
+    assert spec["command"] == [
+        control.sys.executable,
+        "-m",
+        "neuromorphic.training.run",
+        "--config",
+        "runtime.yaml",
+    ]
+    assert spec["creationflags"] != 0
+
+
 def test_start_requires_mechanism_lock_for_full(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

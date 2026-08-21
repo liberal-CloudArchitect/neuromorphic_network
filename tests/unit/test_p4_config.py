@@ -13,14 +13,19 @@ from neuromorphic.training.p4_suite import _early_stop_reached
 
 def test_p4_profile_matrix_sizes_are_frozen() -> None:
     qualification = load_p4_suite_config(Path("configs/experiments/p4/qualification.yaml"))
+    cuda_qualification = load_p4_suite_config(
+        Path("configs/experiments/p4/cuda-qualification.yaml")
+    )
     pilot = load_p4_suite_config(Path("configs/experiments/p4/pilot.yaml"))
     mechanism = load_p4_suite_config(Path("configs/experiments/p4/mechanism.yaml"))
     full = load_p4_suite_config(Path("configs/experiments/p4/full.yaml"))
     assert len(build_p4_matrix(qualification)) == 8
+    assert len(build_p4_matrix(cuda_qualification)) == 8
     assert len(build_p4_matrix(pilot)) == 4
     assert len(build_p4_matrix(mechanism)) == 24
     assert len(build_p4_matrix(full)) == 81
     assert len({cell.cell_id for cell in full.matrix()}) == 81
+    assert cuda_qualification.device == "cuda"
     assert P4_PILOT_PRESETS == {
         "preset-0": (1.0e-4, 1.0e-2, 0.05),
         "preset-1": (1.0e-4, 1.0e-2, 0.10),

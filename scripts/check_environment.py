@@ -18,6 +18,12 @@ def _mps_available() -> bool:
     return bool(backend is not None and backend.is_built() and backend.is_available())
 
 
+def _cuda_available() -> bool:
+    """Return whether PyTorch can create tensors on a CUDA device."""
+
+    return bool(torch.cuda.is_available() and torch.cuda.device_count() > 0)
+
+
 def _select_accelerator(requirement: str) -> tuple[str, str | None]:
     if requirement == "cpu":
         return "cpu", None
@@ -25,6 +31,12 @@ def _select_accelerator(requirement: str) -> tuple[str, str | None]:
         if _mps_available():
             return "mps", None
         return "mps", "MPS was required but is not available"
+    if requirement == "cuda":
+        if _cuda_available():
+            return "cuda", None
+        return "cuda", "CUDA was required but is not available"
+    if _cuda_available():
+        return "cuda", None
     return ("mps", None) if _mps_available() else ("cpu", None)
 
 
@@ -48,21 +60,26 @@ def build_report(requirement: str) -> dict[str, Any]:
     smoke_ok, smoke_error = (
         (False, selection_error) if selection_error else _smoke_test(accelerator)
     )
-    return {
+    report = {
         "python_version": platform.python_version(),
         "torch_version": torch.__version__,
         "platform": platform.platform(),
         "accelerator": accelerator,
         "smoke_ok": smoke_ok,
         "error": smoke_error,
+        "cuda_runtime": torch.version.cuda,
     }
+    if accelerator == "cuda" and _cuda_available():
+        report["accelerator_name"] = torch.cuda.get_device_name(0)
+        report["accelerator_count"] = torch.cuda.device_count()
+    return report
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--require",
-        choices=("auto", "cpu", "mps"),
+        choices=("auto", "cpu", "mps", "cuda"),
         default="auto",
         help="Accelerator that must pass forward/backward smoke validation.",
     )

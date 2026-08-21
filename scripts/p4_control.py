@@ -46,6 +46,7 @@ TERMINAL_STATUSES = {
     "failed",
     "resource_limit",
 }
+HEARTBEAT_STALE_SECONDS = 120.0
 
 
 def _json(path: Path) -> dict[str, Any]:
@@ -83,6 +84,24 @@ def _process_matches_launch(current: dict[str, Any]) -> bool:
     runtime = current.get("runtime_config")
     if pid <= 0 or not isinstance(runtime, str) or not _alive(pid):
         return False
+    if sys.platform == "win32":
+        inspected = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                f'(Get-CimInstance Win32_Process -Filter "ProcessId = {pid}").CommandLine',
+            ],
+            text=True,
+            check=False,
+            capture_output=True,
+        )
+        command = inspected.stdout.strip()
+        return (
+            inspected.returncode == 0
+            and "neuromorphic.training.run" in command
+            and runtime in command
+        )
     inspected = subprocess.run(
         ["ps", "-p", str(pid), "-o", "command="],
         text=True,
@@ -196,6 +215,8 @@ def _background_preflight(*, config: P4SuiteConfig, for_resume: bool) -> str:
             ).stdout
             if "AC Power" not in power:
                 raise RuntimeError("connect the Mac to AC power before starting P4")
+    if config.device == "cuda" and (not torch.cuda.is_available() or torch.cuda.device_count() < 1):
+        raise RuntimeError("P4 CUDA runs require an available CUDA device")
     if shutil.disk_usage(ROOT).free < 100 * 1024**3:
         raise RuntimeError("P4 background runs require at least 100 GiB free")
     if CURRENT.exists():
@@ -244,20 +265,34 @@ def _prepare_runtime(profile: PROFILE, *, head: str) -> tuple[Path, str]:
     return runtime, run_id
 
 
-def _launch(runtime_config: Path, run_id: str, *, resumed: bool) -> dict[str, Any]:
-    control = CONTROL / run_id
-    control.mkdir(parents=True, exist_ok=True)
-    log = control / "runner.log"
-    command = [
-        "/usr/bin/nohup",
-        "/usr/bin/caffeinate",
-        "-ims",
+def _launch_spec(runtime_config: Path) -> dict[str, object]:
+    runner = [
         sys.executable,
         "-m",
         "neuromorphic.training.run",
         "--config",
         str(runtime_config),
     ]
+    if sys.platform == "win32":
+        return {
+            "command": runner,
+            "creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
+            | getattr(subprocess, "DETACHED_PROCESS", 0x00000008),
+            "start_new_session": False,
+        }
+    return {
+        "command": ["/usr/bin/nohup", "/usr/bin/caffeinate", "-ims", *runner],
+        "creationflags": 0,
+        "start_new_session": True,
+    }
+
+
+def _launch(runtime_config: Path, run_id: str, *, resumed: bool) -> dict[str, Any]:
+    control = CONTROL / run_id
+    control.mkdir(parents=True, exist_ok=True)
+    log = control / "runner.log"
+    launch_spec = _launch_spec(runtime_config)
+    command = cast(list[str], launch_spec["command"])
     handle = log.open("a", encoding="utf-8")
     try:
         process = subprocess.Popen(
@@ -266,7 +301,8 @@ def _launch(runtime_config: Path, run_id: str, *, resumed: bool) -> dict[str, An
             stdin=subprocess.DEVNULL,
             stdout=handle,
             stderr=subprocess.STDOUT,
-            start_new_session=True,
+            start_new_session=bool(launch_spec["start_new_session"]),
+            creationflags=cast(int, launch_spec["creationflags"]),
         )
         try:
             return_code = process.wait(timeout=0.25)
@@ -363,6 +399,16 @@ def status() -> dict[str, Any]:
     registry = registry / "registry.json"
     if registry.is_file():
         value = _json(registry)
+        suite_status = value.get("status")
+        result["terminal"] = suite_status in TERMINAL_STATUSES
+        result["terminal_reason"] = suite_status
+        result["resume_allowed"] = (
+            not process_alive
+            and isinstance(suite_status, str)
+            and suite_status not in TERMINAL_STATUSES
+        )
+        if isinstance(value.get("ended_at"), str):
+            result["ended_at"] = value["ended_at"]
         cells = value.get("cells", [])
         registry_elapsed = value.get("wall_clock_seconds")
         if isinstance(registry_elapsed, (int, float)):
@@ -371,6 +417,12 @@ def status() -> dict[str, Any]:
             )
             result["elapsed_seconds"] = elapsed
         if isinstance(cells, list):
+            incomplete = [
+                str(cell.get("cell_id"))
+                for cell in cells
+                if isinstance(cell, dict) and cell.get("status") != "COMPLETED"
+            ]
+            restart_required = bool(suite_status in TERMINAL_STATUSES and incomplete)
             result.update(
                 {
                     "suite_status": value.get("status"),
@@ -389,10 +441,9 @@ def status() -> dict[str, Any]:
                         isinstance(cell, dict) and cell.get("status") in {"PENDING", "RUNNING"}
                         for cell in cells
                     ),
-                    "retryable_cells": sum(
-                        isinstance(cell, dict) and cell.get("status") != "COMPLETED"
-                        for cell in cells
-                    ),
+                    "retryable_cells": 0 if suite_status in TERMINAL_STATUSES else len(incomplete),
+                    "restart_required_cells": len(incomplete) if restart_required else 0,
+                    "incomplete_cells": incomplete,
                     "total_cells": len(cells),
                 }
             )
@@ -423,6 +474,13 @@ def status() -> dict[str, Any]:
     if heartbeat.is_file():
         heartbeat_value = _json(heartbeat)
         result["heartbeat"] = heartbeat_value
+        updated_at = heartbeat_value.get("updated_at")
+        if isinstance(updated_at, str):
+            age_seconds = max(
+                (datetime.now(UTC) - datetime.fromisoformat(updated_at)).total_seconds(), 0.0
+            )
+            result["heartbeat_age_seconds"] = age_seconds
+            result["heartbeat_stale"] = (not process_alive) or age_seconds > HEARTBEAT_STALE_SECONDS
         heartbeat_elapsed = heartbeat_value.get("suite_elapsed_seconds")
         if isinstance(heartbeat_elapsed, (int, float)):
             elapsed = max(elapsed, float(heartbeat_elapsed))
@@ -431,6 +489,11 @@ def status() -> dict[str, Any]:
                 config_path = _under_root(current.get("runtime_config"), label="runtime config")
                 budget = load_p4_suite_config(config_path).budget.wall_clock_hours * 3600.0
                 result["remaining_wall_clock_seconds"] = max(budget - elapsed, 0.0)
+    else:
+        result["heartbeat_stale"] = not process_alive
+    result.setdefault("resume_allowed", False)
+    result.setdefault("terminal", False)
+    result.setdefault("terminal_reason", result.get("suite_status"))
     result["free_bytes"] = shutil.disk_usage(ROOT).free
     return result
 
@@ -466,7 +529,14 @@ def stop(force: bool) -> dict[str, object]:
         if _alive(pid):
             if not _process_matches_launch(current):
                 raise RuntimeError("refusing to signal a PID that does not match the P4 launch")
-            os.killpg(int(current["process_group"]), signal.SIGTERM)
+            if sys.platform == "win32":
+                subprocess.run(
+                    ["taskkill", "/PID", str(pid), "/T", "/F"],
+                    check=True,
+                    capture_output=True,
+                )
+            else:
+                os.killpg(int(current["process_group"]), signal.SIGTERM)
         return {"run_id": current["run_id"], "forced": True}
     if not _alive(pid):
         return {"run_id": current["run_id"], "already_stopped": True}
@@ -562,11 +632,21 @@ def main(arguments: list[str] | None = None) -> int:
         elif parsed.command == "logs":
             current = _current()
             log = _under_root(current.get("log"), label="runner log")
-            tail_arguments = ["tail", "-n", "200"]
-            if _alive(int(current["pid"])):
-                tail_arguments.append("-f")
-            tail_arguments.append(str(log))
-            return subprocess.run(tail_arguments, check=False).returncode
+            if sys.platform == "win32":
+                escaped = str(log).replace("'", "''")
+                command = [
+                    "powershell",
+                    "-NoProfile",
+                    "-Command",
+                    f"Get-Content -LiteralPath '{escaped}' -Tail 200"
+                    + (" -Wait" if _alive(int(current["pid"])) else ""),
+                ]
+            else:
+                command = ["tail", "-n", "200"]
+                if _alive(int(current["pid"])):
+                    command.append("-f")
+                command.append(str(log))
+            return subprocess.run(command, check=False).returncode
         elif parsed.command == "resume":
             result = resume()
         elif parsed.command == "stop":

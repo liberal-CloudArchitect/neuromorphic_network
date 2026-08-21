@@ -60,3 +60,15 @@ def test_required_unavailable_mps_returns_failure() -> None:
     report = json.loads(result.stdout)
     assert report["smoke_ok"] is False
     assert report["error"]
+
+
+def test_required_unavailable_cuda_returns_failure() -> None:
+    if torch.cuda.is_available():
+        pytest.skip("This assertion only applies to hosts without CUDA")
+    result = _run_check("cuda")
+    assert result.returncode != 0
+    report = json.loads(result.stdout)
+    assert report["accelerator"] == "cuda"
+    assert report["smoke_ok"] is False
+    assert report["error"]
+    assert "cuda_runtime" in report

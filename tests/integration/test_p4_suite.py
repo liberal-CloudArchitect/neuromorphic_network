@@ -196,6 +196,71 @@ def test_registry_is_atomic_complete_verifiable_and_resume_skips_completed(
     jsonschema.validate(registry, schema)
 
 
+def test_registry_records_terminal_timestamp_after_completion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[str] = []
+    _patch_fast_execution(monkeypatch, calls)
+    monkeypatch.setattr(p4_suite, "_repository_state", lambda: ("clean-sha", False))
+    config = _config(tmp_path, run_id="ended-at")
+
+    p4_suite.run_p4_suite(config)
+
+    registry = json.loads((tmp_path / "ended-at" / "registry.json").read_text(encoding="utf-8"))
+    assert isinstance(registry["ended_at"], str)
+
+
+def test_cell_execution_mode_is_isolated_for_mps(tmp_path: Path) -> None:
+    config = _config(tmp_path, run_id="isolated").model_copy(update={"device": "mps"})
+
+    assert p4_suite._cell_execution_mode(config) == "isolated"
+
+
+def test_cell_execution_mode_is_direct_for_cpu(tmp_path: Path) -> None:
+    config = _config(tmp_path, run_id="direct")
+
+    assert p4_suite._cell_execution_mode(config) == "direct"
+
+
+def test_isolated_cell_runner_returns_worker_summary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _config(tmp_path, run_id="worker")
+    cell = config.matrix()[0]
+    cell_directory = tmp_path / "worker" / "cells" / cell.cell_id
+    suite_directory = tmp_path / "worker"
+
+    monkeypatch.setattr(
+        p4_suite,
+        "_run_worker",
+        lambda *args, **kwargs: {
+            "matching": "fixture",
+            "training": {"steps": 12},
+            "parameters": 1,
+            "trainable_parameters": 1,
+        },
+    )
+    monkeypatch.setattr(
+        p4_suite,
+        "_run_isolated_evaluation",
+        lambda *args, **kwargs: {"record_count": 0, "views": {}},
+    )
+
+    summary = p4_suite._run_cell_isolated(
+        config,
+        cell,
+        torch.device("cpu"),
+        cell_directory,
+        suite_directory,
+        cursor=0,
+        deadline=time.perf_counter() + 60.0,
+        pilot_hash=None,
+        mechanism_hash=None,
+    )
+
+    assert summary["matching"] == "fixture"
+
+
 def test_failed_cell_is_preserved_and_retried_without_repeating_completed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -419,6 +484,101 @@ def test_phase_heartbeat_replaces_stale_training_cursor(tmp_path: Path) -> None:
     assert heartbeat["completed"] == 1024
     assert heartbeat["total"] == 2048
     assert heartbeat["turn"] == 3
+
+
+def test_short_lived_worker_stage_is_atomic_and_reused(tmp_path: Path) -> None:
+    config = _config(tmp_path, run_id="isolated-worker")
+    directory = tmp_path / "isolated-worker"
+    directory.mkdir(parents=True)
+    (directory / "config.json").write_text(
+        json.dumps(config.model_dump(mode="json")), encoding="utf-8"
+    )
+    cell = config.matrix()[0]
+    cell_directory = directory / "cells" / cell.cell_id
+    result_path = cell_directory / "training-stage.json"
+    deadline = time.perf_counter() + 180.0
+
+    first = p4_suite._run_worker(
+        config,
+        cell,
+        suite_directory=directory,
+        result_path=result_path,
+        deadline=deadline,
+        arguments=["--stage", "train"],
+    )
+
+    assert first["status"] == "COMPLETED"
+    assert first["training"]["steps"] > 0
+    assert p4_suite._worker_result_valid(
+        result_path,
+        config=config,
+        cell=cell,
+        suite_directory=directory,
+    )
+    worker_schema = json.loads(
+        (Path(__file__).parents[2] / "schemas" / "p4-worker-result-v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    jsonschema.validate(first, worker_schema)
+    before = result_path.stat().st_mtime_ns
+    second = p4_suite._run_worker(
+        config,
+        cell,
+        suite_directory=directory,
+        result_path=result_path,
+        deadline=deadline,
+        arguments=["--stage", "train"],
+    )
+    assert second == first
+    assert result_path.stat().st_mtime_ns == before
+
+
+def test_isolated_standard_evaluation_loads_frozen_checkpoint(tmp_path: Path) -> None:
+    config = _config(tmp_path, run_id="isolated-evaluation")
+    directory = tmp_path / "isolated-evaluation"
+    directory.mkdir(parents=True)
+    (directory / "config.json").write_text(
+        json.dumps(config.model_dump(mode="json")), encoding="utf-8"
+    )
+    cell = config.matrix()[0]
+    deadline = time.perf_counter() + 180.0
+    cell_directory = directory / "cells" / cell.cell_id
+    p4_suite._run_worker(
+        config,
+        cell,
+        suite_directory=directory,
+        result_path=cell_directory / "training-stage.json",
+        deadline=deadline,
+        arguments=["--stage", "train"],
+    )
+    part_directory = cell_directory / "evaluation" / "standard__associative_recall.v1"
+
+    result = p4_suite._run_worker(
+        config,
+        cell,
+        suite_directory=directory,
+        result_path=part_directory / "result.json",
+        deadline=deadline,
+        arguments=[
+            "--stage",
+            "standard",
+            "--task-id",
+            "associative_recall.v1",
+            "--artifact-directory",
+            str(part_directory),
+        ],
+    )
+
+    assert result["status"] == "COMPLETED"
+    assert result["evaluation"]["record_count"] == 160
+    assert result["evaluation"]["views"]["associative_recall.v1"] == {
+        "analysis:v1": 32,
+        "test:v1": 32,
+        "ood:capacity": 32,
+        "ood:interference": 32,
+        "ood:joint": 32,
+    }
 
 
 def test_pilot_never_enters_analysis_test_or_ood_evaluator(

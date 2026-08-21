@@ -14,6 +14,7 @@ import json
 import math
 import shutil
 import subprocess
+import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
@@ -220,6 +221,77 @@ def _sha256(path: Path) -> str:
 def _canonical_sha256(value: Mapping[str, object]) -> str:
     encoded = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _cell_execution_mode(config: P4SuiteConfig) -> Literal["direct", "isolated"]:
+    """Use a fresh interpreter for accelerator-backed cells to bound cache lifetime."""
+
+    return "isolated" if config.device in {"mps", "cuda"} else "direct"
+
+
+def _run_cell_isolated(
+    config: P4SuiteConfig,
+    cell: P4ExperimentCell,
+    device: torch.device,
+    cell_directory: Path,
+    suite_directory: Path,
+    *,
+    cursor: int,
+    deadline: float,
+    pilot_hash: str | None,
+    mechanism_hash: str | None,
+) -> dict[str, object]:
+    del device
+    worker_arguments = ["--stage", "train"]
+    if pilot_hash is not None:
+        worker_arguments.extend(("--pilot-hash", pilot_hash))
+    if mechanism_hash is not None:
+        worker_arguments.extend(("--mechanism-hash", mechanism_hash))
+    training_stage = _run_worker(
+        config,
+        cell,
+        suite_directory=suite_directory,
+        result_path=cell_directory / "training-stage.json",
+        deadline=deadline,
+        arguments=worker_arguments,
+    )
+    training = cast(dict[str, object], training_stage["training"])
+    if training_stage.get("status") == "STOPPED" or training.get("stopped"):
+        return {
+            "schema_version": "p4-cell-summary-v1",
+            "cell": cell.model_dump(mode="json"),
+            "matching": str(training_stage["matching"]),
+            "parameters": int(training_stage["parameters"]),
+            "trainable_parameters": int(training_stage["trainable_parameters"]),
+            "training": training,
+            "evaluation": {},
+        }
+    summary = {
+        "schema_version": "p4-cell-summary-v1",
+        "cell": cell.model_dump(mode="json"),
+        "matching": str(training_stage["matching"]),
+        "parameters": int(training_stage["parameters"]),
+        "trainable_parameters": int(training_stage["trainable_parameters"]),
+        "training": training,
+        "evaluation": (
+            {
+                "record_count": 0,
+                "views": {"selection": "validation_only"},
+                "routing": {},
+                "prediction": training["prediction"],
+                "telemetry_v2_events": 0,
+            }
+            if config.profile == "pilot"
+            else _run_isolated_evaluation(
+                config,
+                cell,
+                suite_directory=suite_directory,
+                cell_directory=cell_directory,
+                deadline=deadline,
+            )
+        ),
+    }
+    return summary
 
 
 def _repository_state() -> tuple[str, bool]:
@@ -1220,6 +1292,8 @@ def _evaluate_cell(
     directory: Path,
     suite_directory: Path,
     deadline: float,
+    *,
+    include_live_rollouts: bool = True,
 ) -> dict[str, object]:
     if cell.cell_type == "pilot":
         pilot_scores, pilot_prediction = _score_split(
@@ -1330,7 +1404,7 @@ def _evaluate_cell(
                 distribution=distribution,
                 records=config.data.ood,
             )
-            if task_id == "small_graph.v1":
+            if task_id == "small_graph.v1" and include_live_rollouts:
 
                 def ood_rollout_progress(
                     completed: int,
@@ -1373,7 +1447,7 @@ def _evaluate_cell(
                     distribution=distribution,
                     records=len(rollout),
                 )
-        if task_id == "small_graph.v1":
+        if task_id == "small_graph.v1" and include_live_rollouts:
             task = cast(SmallGraphTask, _task(config, task_id))
 
             def test_rollout_progress(
@@ -1489,6 +1563,70 @@ def _evaluate_cell(
         "prediction": prediction,
         "scores": scores,
         "telemetry_v2_events": len(telemetry_records),
+    }
+
+
+def _evaluate_live_rollout_view(
+    model: nn.Module,
+    cell: P4ExperimentCell,
+    config: P4SuiteConfig,
+    device: torch.device,
+    directory: Path,
+    suite_directory: Path,
+    deadline: float,
+    *,
+    split: Literal["test", "ood"],
+    distribution: str,
+) -> dict[str, object]:
+    """Evaluate one SmallGraph rollout view in a process-isolation-friendly form."""
+
+    task = cast(SmallGraphTask, _task(config, "small_graph.v1", distribution))
+    size = config.data.test if split == "test" else config.data.ood
+
+    def progress(completed: int, total: int, turn: int) -> None:
+        _write_phase_heartbeat(
+            suite_directory,
+            cell,
+            phase="live_rollout",
+            task_id="small_graph.v1",
+            split=split,
+            distribution=distribution,
+            completed=completed,
+            total=total,
+            deadline=deadline,
+            turn=turn,
+        )
+
+    model.eval()
+    records = _rollout_records_with_chance(
+        model,
+        cell,
+        task,
+        split,
+        size,
+        device,
+        batch_size=_live_rollout_batch_size(config, size),
+        deadline=deadline,
+        progress=progress,
+    )
+    _write_jsonl(directory / "sample_records.jsonl", records)
+    score = sum(_numeric(item, "success_rate") for item in records) / len(records)
+    view_id = f"{split}:{distribution}:live_rollout"
+    _emit_progress(
+        "evaluation_view_completed",
+        cell_id=cell.cell_id,
+        task_id="small_graph.v1",
+        split=f"{split}-live-rollout",
+        distribution=distribution,
+        records=len(records),
+    )
+    return {
+        "record_count": len(records),
+        "views": {"small_graph.v1": {view_id: len(records)}},
+        "routing": {},
+        "prediction": {},
+        "scores": {"small_graph.v1": score},
+        "telemetry_v2_events": 0,
     }
 
 
@@ -2074,7 +2212,271 @@ def _mechanism_gate_evidence(config: P4SuiteConfig, directory: Path) -> dict[str
     }
 
 
-def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
+def _worker_result_valid(
+    path: Path,
+    *,
+    config: P4SuiteConfig,
+    cell: P4ExperimentCell,
+    suite_directory: Path,
+) -> bool:
+    """Accept a completed worker result only when its frozen inputs still match."""
+
+    if not path.is_file():
+        return False
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+        if (
+            value.get("schema_version") != "p4-worker-result-v1"
+            or value.get("status") != "COMPLETED"
+            or value.get("cell_id") != cell.cell_id
+            or value.get("config_hash") != config.config_hash()
+            or value.get("matrix_hash") != config.matrix_hash()
+            or value.get("protocol_hash") != PROTOCOL_HASH
+        ):
+            return False
+        checkpoint = value.get("checkpoint")
+        checkpoint_hash = value.get("checkpoint_sha256")
+        if checkpoint is not None or checkpoint_hash is not None:
+            if not isinstance(checkpoint, str) or not isinstance(checkpoint_hash, str):
+                return False
+            checkpoint_path = (suite_directory / checkpoint).resolve()
+            checkpoint_path.relative_to(suite_directory.resolve())
+            if not checkpoint_path.is_file() or _sha256(checkpoint_path) != checkpoint_hash:
+                return False
+        artifacts = value.get("artifacts", {})
+        if not isinstance(artifacts, Mapping):
+            return False
+        for name, expected in artifacts.items():
+            if not isinstance(name, str) or not isinstance(expected, str):
+                return False
+            artifact = (path.parent / name).resolve()
+            artifact.relative_to(path.parent.resolve())
+            if not artifact.is_file() or _sha256(artifact) != expected:
+                return False
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return False
+    return True
+
+
+def _run_worker(
+    config: P4SuiteConfig,
+    cell: P4ExperimentCell,
+    *,
+    suite_directory: Path,
+    result_path: Path,
+    deadline: float,
+    arguments: Sequence[str],
+) -> dict[str, Any]:
+    if _worker_result_valid(
+        result_path,
+        config=config,
+        cell=cell,
+        suite_directory=suite_directory,
+    ):
+        return cast(dict[str, Any], json.loads(result_path.read_text(encoding="utf-8")))
+    command = [
+        sys.executable,
+        "-m",
+        "neuromorphic.training.p4_worker",
+        "--config",
+        str(suite_directory / "config.json"),
+        "--suite-directory",
+        str(suite_directory),
+        "--cell-id",
+        cell.cell_id,
+        "--output",
+        str(result_path),
+        "--remaining-seconds",
+        repr(max(deadline - time.perf_counter(), 0.0)),
+        *arguments,
+    ]
+    completed = subprocess.run(command, check=False)
+    if not result_path.is_file():
+        raise RuntimeError(
+            f"P4 worker exited without an atomic result: {cell.cell_id} code={completed.returncode}"
+        )
+    result = cast(dict[str, Any], json.loads(result_path.read_text(encoding="utf-8")))
+    if result.get("status") == "RESOURCE_LIMIT":
+        error = cast(Mapping[str, object], result.get("error", {}))
+        raise P4ResourceLimit(str(error.get("message", "P4 worker resource limit")))
+    if result.get("status") == "STOPPED":
+        return result
+    if completed.returncode != 0 or not _worker_result_valid(
+        result_path,
+        config=config,
+        cell=cell,
+        suite_directory=suite_directory,
+    ):
+        error = cast(Mapping[str, object], result.get("error", {}))
+        raise RuntimeError(
+            f"P4 worker failed: {cell.cell_id} stage={result.get('stage')} "
+            f"code={completed.returncode} error={error.get('message', 'invalid result')}"
+        )
+    return result
+
+
+def _merge_isolated_evaluation(
+    parts: Sequence[Mapping[str, Any]],
+    *,
+    cell_directory: Path,
+) -> dict[str, object]:
+    records: list[dict[str, object]] = []
+    telemetry: list[dict[str, object]] = []
+    views: dict[str, dict[str, int]] = {}
+    routing: dict[str, object] = {}
+    prediction: dict[str, object] = {}
+    scores: dict[str, float] = {}
+    for part in parts:
+        evaluation = cast(Mapping[str, Any], part["evaluation"])
+        artifact_directory = Path(cast(str, part["artifact_directory"]))
+        record_path = artifact_directory / "sample_records.jsonl"
+        if record_path.is_file():
+            records.extend(
+                json.loads(line)
+                for line in record_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            )
+        telemetry_path = artifact_directory / "telemetry-v2.jsonl"
+        if telemetry_path.is_file():
+            telemetry.extend(
+                json.loads(line)
+                for line in telemetry_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            )
+        task_views = cast(Mapping[str, Mapping[str, int]], evaluation.get("views", {}))
+        for task_id, task_view in task_views.items():
+            views.setdefault(task_id, {}).update(task_view)
+        routing.update(cast(Mapping[str, object], evaluation.get("routing", {})))
+        prediction.update(cast(Mapping[str, object], evaluation.get("prediction", {})))
+        part_scores = cast(Mapping[str, object], evaluation.get("scores", {}))
+        scores.update({name: _numeric(part_scores, name) for name in part_scores})
+    _write_jsonl(cell_directory / "sample_records.jsonl", records)
+    _write_jsonl(cell_directory / "telemetry-v2.jsonl", telemetry)
+    return {
+        "record_count": len(records),
+        "views": views,
+        "routing": routing,
+        "prediction": prediction,
+        "scores": scores,
+        "telemetry_v2_events": len(telemetry),
+    }
+
+
+def _run_isolated_evaluation(
+    config: P4SuiteConfig,
+    cell: P4ExperimentCell,
+    *,
+    suite_directory: Path,
+    cell_directory: Path,
+    deadline: float,
+) -> dict[str, object]:
+    """Run task and rollout partitions in fresh processes and merge them atomically."""
+
+    task_ids = (cell.task_id,) if cell.task_id else P4_TASK_ORDER
+    specifications: list[tuple[str, list[str]]] = []
+    for task_id in task_ids:
+        specifications.append(
+            (f"standard__{task_id}", ["--stage", "standard", "--task-id", task_id])
+        )
+        if task_id == "small_graph.v1":
+            for distribution in _OOD_DISTRIBUTIONS[task_id]:
+                specifications.append(
+                    (
+                        f"rollout__ood__{distribution}",
+                        [
+                            "--stage",
+                            "rollout",
+                            "--task-id",
+                            task_id,
+                            "--split",
+                            "ood",
+                            "--distribution",
+                            distribution,
+                        ],
+                    )
+                )
+            specifications.append(
+                (
+                    "rollout__test__v1",
+                    [
+                        "--stage",
+                        "rollout",
+                        "--task-id",
+                        task_id,
+                        "--split",
+                        "test",
+                        "--distribution",
+                        "v1",
+                    ],
+                )
+            )
+    evaluation_root = cell_directory / "evaluation"
+    registry_path = cell_directory / "evaluation-registry.json"
+    registry: dict[str, Any] = {
+        "schema_version": "p4-evaluation-registry-v1",
+        "cell_id": cell.cell_id,
+        "config_hash": config.config_hash(),
+        "matrix_hash": config.matrix_hash(),
+        "protocol_hash": PROTOCOL_HASH,
+        "partitions": [],
+    }
+    if registry_path.is_file():
+        existing = json.loads(registry_path.read_text(encoding="utf-8"))
+        if all(
+            existing.get(name) == registry[name]
+            for name in ("cell_id", "config_hash", "matrix_hash", "protocol_hash")
+        ):
+            registry = existing
+    entries = {
+        cast(str, entry["partition_id"]): entry
+        for entry in cast(list[dict[str, Any]], registry.get("partitions", []))
+    }
+    parts: list[dict[str, Any]] = []
+    for partition_id, arguments in specifications:
+        part_directory = evaluation_root / partition_id
+        result_path = part_directory / "result.json"
+        entry = entries.setdefault(
+            partition_id,
+            {"partition_id": partition_id, "status": "PENDING", "attempts": []},
+        )
+        entry["status"] = "RUNNING"
+        cast(list[dict[str, object]], entry["attempts"]).append(
+            {"started_at": datetime.now(UTC).isoformat()}
+        )
+        registry["partitions"] = [entries[name] for name, _ in specifications]
+        _write_json(registry_path, registry)
+        try:
+            part = _run_worker(
+                config,
+                cell,
+                suite_directory=suite_directory,
+                result_path=result_path,
+                deadline=deadline,
+                arguments=[
+                    *arguments,
+                    "--artifact-directory",
+                    str(part_directory),
+                ],
+            )
+        except BaseException:
+            entry["status"] = "FAILED"
+            cast(list[dict[str, object]], entry["attempts"])[-1].update(
+                {"completed_at": datetime.now(UTC).isoformat(), "result": "FAILED"}
+            )
+            _write_json(registry_path, registry)
+            raise
+        part["artifact_directory"] = str(part_directory)
+        entry["status"] = "COMPLETED"
+        entry["result_sha256"] = _sha256(result_path)
+        cast(list[dict[str, object]], entry["attempts"])[-1].update(
+            {"completed_at": datetime.now(UTC).isoformat(), "result": "COMPLETED"}
+        )
+        _write_json(registry_path, registry)
+        parts.append(part)
+    return _merge_isolated_evaluation(parts, cell_directory=cell_directory)
+
+
+def run_p4_suite(config: P4SuiteConfig, *, isolate_processes: bool = False) -> dict[str, object]:
     """Run or resume P4, preserving every failure and completed matrix cell."""
 
     set_global_seed(config.seeds[0])
@@ -2124,6 +2526,7 @@ def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
         raise ValueError("P4 prior wall-clock ledger is invalid")
     deadline = started + max(config.budget.wall_clock_hours * 3600.0 - prior, 0.0)
     registry["status"] = "running"
+    registry.pop("ended_at", None)
     entries = cast(list[dict[str, Any]], registry["cells"])
 
     def persist() -> None:
@@ -2175,25 +2578,46 @@ def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
         model: nn.Module | None = None
         try:
             cell_started = time.perf_counter()
-            model, matching = _build_model(config, cell, device)
-            if cell.max_steps == 0:
-                _load_parent(model, cell, directory, device)
-            training = (
-                _train_cell(
-                    model,
-                    cell,
+            if isolate_processes:
+                summary = _run_cell_isolated(
                     config,
+                    cell,
                     device,
                     cell_directory,
                     directory,
-                    cursor,
-                    deadline,
-                    pilot_hash,
-                    mechanism_hash,
+                    cursor=cursor,
+                    deadline=deadline,
+                    pilot_hash=pilot_hash,
+                    mechanism_hash=mechanism_hash,
                 )
-                if cell.max_steps
-                else {"steps": 0, "wall_clock_seconds": 0.0}
-            )
+                training = cast(dict[str, object], summary["training"])
+                matching = str(summary["matching"])
+                parameters = cast(int, summary["parameters"])
+                trainable_parameters = cast(int, summary["trainable_parameters"])
+            else:
+                model, matching = _build_model(config, cell, device)
+                if cell.max_steps == 0:
+                    _load_parent(model, cell, directory, device)
+                training = (
+                    _train_cell(
+                        model,
+                        cell,
+                        config,
+                        device,
+                        cell_directory,
+                        directory,
+                        cursor,
+                        deadline,
+                        pilot_hash,
+                        mechanism_hash,
+                    )
+                    if cell.max_steps
+                    else {"steps": 0, "wall_clock_seconds": 0.0}
+                )
+                parameters = sum(parameter.numel() for parameter in model.parameters())
+                trainable_parameters = sum(
+                    parameter.numel() for parameter in model.parameters() if parameter.requires_grad
+                )
             if training.get("stopped"):
                 entry["status"] = "PENDING"
                 registry["status"] = "stopped"
@@ -2214,7 +2638,9 @@ def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
                     steps=training.get("steps", 0),
                 )
                 break
-            if config.profile == "pilot":
+            if isolate_processes:
+                evaluation = cast(dict[str, object], summary["evaluation"])
+            elif config.profile == "pilot":
                 # Pilot selection is validation-only.  Do not instantiate or
                 # access analysis/test/OOD before the preset lock exists.
                 evaluation = {
@@ -2226,7 +2652,7 @@ def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
                 }
             else:
                 evaluation = _evaluate_cell(
-                    model,
+                    cast(nn.Module, model),
                     cell,
                     config,
                     device,
@@ -2238,10 +2664,8 @@ def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
                 "schema_version": "p4-cell-summary-v1",
                 "cell": cell.model_dump(mode="json"),
                 "matching": matching,
-                "parameters": sum(parameter.numel() for parameter in model.parameters()),
-                "trainable_parameters": sum(
-                    parameter.numel() for parameter in model.parameters() if parameter.requires_grad
-                ),
+                "parameters": parameters,
+                "trainable_parameters": trainable_parameters,
                 "training": training,
                 "evaluation": evaluation,
                 "wall_clock_seconds": time.perf_counter() - cell_started,
@@ -2263,6 +2687,8 @@ def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
         except P4ResourceLimit as error:
             entry["status"] = "RESOURCE_LIMIT"
             entry["error"] = {"type": type(error).__name__, "message": str(error)}
+            entry["attempts"][-1]["completed_at"] = datetime.now(UTC).isoformat()
+            entry["attempts"][-1]["result"] = "RESOURCE_LIMIT"
             registry["status"] = "resource_limit"
             _emit_progress(
                 "cell_resource_limit",
@@ -2313,6 +2739,7 @@ def run_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
     registry["resource_limited_cells"] = statuses.count("RESOURCE_LIMIT")
     registry["total_cells"] = len(statuses)
     registry["wall_clock_seconds"] = prior + time.perf_counter() - started
+    registry["ended_at"] = datetime.now(UTC).isoformat()
     if config.profile == "qualification":
         evidence = _qualification_evidence(config, directory)
         registry["qualification_evidence"] = evidence
@@ -2530,6 +2957,16 @@ def verify_p4_run(directory: Path) -> dict[str, object]:
     }
 
 
-execute_p4_suite = run_p4_suite
+def execute_p4_suite(config: P4SuiteConfig) -> dict[str, object]:
+    """Execute CLI suites through short-lived stage workers.
+
+    Tests and diagnostic callers may still invoke :func:`run_p4_suite` directly
+    for an in-process fixture.  Production P4 execution always isolates model
+    lifetimes so accelerator graph/compiler caches cannot accumulate across the
+    frozen matrix.
+    """
+
+    return run_p4_suite(config, isolate_processes=_cell_execution_mode(config) == "isolated")
+
 
 __all__ = ["P4ResourceLimit", "execute_p4_suite", "run_p4_suite", "verify_p4_run"]
