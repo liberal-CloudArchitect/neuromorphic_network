@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-import resource
-import sys
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -29,6 +27,7 @@ from neuromorphic.training.metrics import (
     ensure_finite_training_state,
     masked_task_loss,
 )
+from neuromorphic.training.resource_metrics import process_peak_rss_bytes
 
 
 @dataclass(slots=True)
@@ -217,10 +216,7 @@ def _device_memory_bytes(device: torch.device) -> tuple[int, str]:
         return int(
             torch.mps.current_allocated_memory()
         ), "sampled torch.mps.current_allocated_memory"
-    maximum = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
-    if sys.platform != "darwin":
-        maximum *= 1024
-    return maximum, "process ru_maxrss"
+    return process_peak_rss_bytes()
 
 
 def train_baseline(

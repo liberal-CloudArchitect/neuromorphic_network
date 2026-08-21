@@ -5,10 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import resource
 import shutil
 import subprocess
-import sys
 import time
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
@@ -68,6 +66,7 @@ from neuromorphic.training.p3_config import (
     P3SuiteConfig,
 )
 from neuromorphic.training.reproducibility import set_global_seed
+from neuromorphic.training.resource_metrics import process_peak_rss_bytes
 from neuromorphic.training.trainer import IndexSampler
 
 GIB = 1024**3
@@ -859,10 +858,13 @@ def _profile_cell_cost(
             "total_parameters": total,
             "records": [],
         }
-    peak_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    peak_memory = int(peak_rss if sys.platform == "darwin" else peak_rss * 1024)
+    peak_memory, peak_memory_method = process_peak_rss_bytes()
     if device.type == "mps":
         peak_memory = max(peak_memory, int(torch.mps.current_allocated_memory()))
+        peak_memory_method = "max(process peak RSS, MPS current allocator)"
+    if device.type == "cuda":
+        peak_memory = max(peak_memory, int(torch.cuda.max_memory_allocated(device)))
+        peak_memory_method = "max(process peak RSS, CUDA peak allocator)"
     return {
         "mac_accounting": "effective_valid_token_calls",
         "active_path_parameters": _active_path_parameters(model, cell),
@@ -875,7 +877,7 @@ def _profile_cell_cost(
             "p95": _percentile(latencies, 0.95),
         },
         "peak_memory_bytes": peak_memory,
-        "peak_memory_method": "process_max_rss_and_device_allocator",
+        "peak_memory_method": peak_memory_method,
     }
 
 
