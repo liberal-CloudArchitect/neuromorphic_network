@@ -85,11 +85,11 @@ last_updated: 2026-07-26
 | P4-07 | 实现 chance/OOD/AULC/forgetting 与严格配对统计 | DONE | SmallGraph DP、非法输入和 bootstrap fixture |
 | P4-08 | 实现 qualification/pilot/mechanism/full registry | DONE | 8/4/24/81 cell 配置与完整性测试 |
 | P4-09 | 实现后台 start/status/logs/resume/stop/verify 和阶段锁 | DONE | 控制器单测、clean SHA/CI/MPS/电源/磁盘预检 |
-| P4-10 | CPU/MPS qualification 与独立 GATE-4-QUAL | IN_PROGRESS | v1 历史 Gate 已通过；v2 dirty-SHA CPU micro 8/8，仍须在提交后的同一 clean SHA 重建远程 CI、MPS qualification 与独立复审 |
+| P4-10 | CPU/MPS qualification 与独立 GATE-4-QUAL | IN_PROGRESS | clean implementation SHA `d9a49b86` 的 MPS qualification 8/8、checksum 全部有效，且同 SHA CI 绿色；仍须独立复审并生成新的 Gate/lock，不能沿用历史资格锁 |
 | P4-11 | 冻结 pilot 选择 | IN_PROGRESS | SHA `bcbbe9e2` 的 4/4 pilot 选中 `preset-2`；protocol-v2 新 SHA 必须重新生成同 SHA lock |
 | P4-12 | 三 seed 24-cell 机制矩阵与 GATE-4-MECH | IN_PROGRESS | v1 run 分别完成 15/24、8/24，均 `RESOURCE_LIMIT / INCONCLUSIVE`；CR-005 仅将机制预算修订为 48h，并增加阶段 heartbeat/cache 清理 |
 | P4-13 | 81-cell 正式矩阵与 GATE-4 | NOT_STARTED | 仅机制 Gate 通过后启动 |
 | P4-14 | GATE-NN-MVP-v2 与可选 network-mvp-v2 bundle | NOT_STARTED | 只有科学 Gate 通过才生成 bundle |
 | P4-15 | 版本升级 0.5.0 | NOT_STARTED | 仅 GATE-4 PASSED 后执行 |
 | P4-16 | 冻结 protocol-v2 的 mechanism 资源修订与阶段可观测性 | DONE | `CR-005`、48h 配置、evaluation/live-rollout heartbeat、cell 间 MPS cache 清理；不改变科学阈值 |
-| P4-17 | 隔离 accelerator worker、持久化评估分区并建立 Windows/CUDA 工程验证路径 | IN_PROGRESS | `CR-006`；待 clean-SHA 本地 MPS、RTX 4060 CUDA 与远程 CI 证据闭环 |
+| P4-17 | 隔离 accelerator worker、持久化评估分区并建立 Windows/CUDA 工程验证路径 | DONE | `CR-006`；clean implementation SHA `d9a49b86` 的 MPS/CUDA qualification 均 8/8，GitHub Actions `32511375072` 绿色；详见 `reports/p4/execution-isolation.md` |

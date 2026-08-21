@@ -140,5 +140,8 @@ last_updated: 2026-07-15
 - `LIMIT-P4-MECH-002`：同一 SHA 的第二次 mechanism `p4-mechanism-bcbbe9e2-20260727T044447Z` 在 `86,953.05 s` 停止；完成 seed 17 全部八个 cell，合计 `44,080.27 s`，总计 8/24、失败 0、checksum 有效。24h 即使排除后续疑似系统挂起也不足以覆盖三个 seed，结论仍为 `RESOURCE_LIMIT / INCONCLUSIVE`。
 - `PROTO-P4-002`：`CR-005` 建立 `p4-protocol-v2`，只将 mechanism 累计墙钟调整为 48h，并加入 evaluation heartbeat 与 cell 间 MPS cache 清理；架构、数据、seed、训练预算、矩阵、统计与科学阈值均保持不变。v1 产物不得续接或拼入 v2 Gate。
 - `ENG-P4-EXEC-002`：`CR-006` 冻结 execution-only 的 supervisor/worker 边界：训练按 cell、标准评估按 task、SmallGraph live rollout 按 view 隔离进程，并用原子 worker result、evaluation registry 与 checksum 实现分区级恢复。CUDA qualification 只作为工程验证，不替代正式 MPS Gate。
+- `QUAL-P4-MPS-003`：clean implementation SHA `d9a49b861dcd02a0225c221c1fb4c54545924792` 的 MPS run `p4-qualification-20260821T180407Z` 完成 8/8 cells、失败 0、资源超限 0、4,864 条逐样本记录和 186 个登记产物，checksum 全部有效；总墙钟 `1008.06 s`。SmallGraph 独立 rollout worker 单 view 约 `3.05–6.49 s`，未复现长进程的小时级拖尾。
+- `QUAL-P4-CUDA-001`：同一 implementation SHA 的 Windows 11 / RTX 4060 Laptop GPU 工程 run `p4-cuda-qualification-d9a49b86-20260821T180356Z` 完成 8/8 cells、失败 0、资源超限 0、4,864 条逐样本记录和 186 个登记产物，checksum 全部有效；总墙钟 `473.60 s`。环境为 Python `3.12.13`、PyTorch `2.12.1+cu126`、CUDA runtime `12.6`；该结果验证 CUDA 与 Windows 控制链，不替代冻结为 MPS 的科学 Gate。
+- `QUAL-P4-CI-002`：同一 implementation SHA 的 GitHub Actions run `32511375072` 成功，完成 CPU lint、format、mypy、pytest 与回归门禁。工程实现、MPS/CUDA qualification 和 CI 的详细边界记录于 `reports/p4/execution-isolation.md`。
 
 P4 的新 SHA pilot、正式机制与完整矩阵仍须在对应报告中另行登记。当前不得授予 network-mvp-v2 标签，也不得把 qualification、旧 pilot 或不完整机制指标解释为科学收益。
