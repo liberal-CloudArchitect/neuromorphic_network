@@ -401,6 +401,38 @@ def test_nonqualification_preflight_requires_successful_ci_lock(
         control._background_preflight(config=config, for_resume=False)
 
 
+def test_qualification_preflight_replaces_dead_launch_without_registry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(control, "ROOT", tmp_path)
+    monkeypatch.setattr(control, "CURRENT", tmp_path / "artifacts/p4/control/current.json")
+    _write_json(
+        control.CURRENT,
+        {
+            "pid": 12_484,
+            "artifact_dir": "artifacts/runs/stale-launch",
+        },
+    )
+
+    def fake_git(*arguments: str) -> str:
+        if arguments == ("status", "--porcelain"):
+            return ""
+        if arguments in {("rev-parse", "HEAD"), ("rev-parse", "origin/main")}:
+            return "abc123"
+        raise AssertionError(arguments)
+
+    monkeypatch.setattr(control, "_git", fake_git)
+    monkeypatch.setattr(control, "_alive", lambda pid: False)
+    monkeypatch.setattr(
+        control.shutil,
+        "disk_usage",
+        lambda path: SimpleNamespace(free=101 * 1024**3),
+    )
+    config = control._profile_config("qualification").model_copy(update={"device": "cpu"})
+
+    assert control._background_preflight(config=config, for_resume=False) == "abc123"
+
+
 def test_record_ci_freezes_latest_success_for_head(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -241,7 +241,7 @@ def _background_preflight(*, config: P4SuiteConfig, for_resume: bool) -> str:
         if not for_resume:
             registry = _under_root(current.get("artifact_dir"), label="artifact directory")
             registry = registry / "registry.json"
-            if not registry.is_file() or _json(registry).get("status") not in TERMINAL_STATUSES:
+            if registry.is_file() and _json(registry).get("status") not in TERMINAL_STATUSES:
                 raise RuntimeError(
                     "a prior P4 run exists; inspect it and use resume instead of start"
                 )
