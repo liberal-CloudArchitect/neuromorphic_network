@@ -26,17 +26,27 @@ CONTROL = ROOT / "artifacts/p4/control"
 QUALIFICATION_LOCK = ROOT / "artifacts/p4/qualification-lock.json"
 PILOT_LOCK = ROOT / "artifacts/p4/pilot-lock.json"
 MECHANISM_LOCK = ROOT / "artifacts/p4/mechanism-lock.json"
+CUDA_QUALIFICATION_LOCK = ROOT / "artifacts/p4-cuda/qualification-lock.json"
+CUDA_PILOT_LOCK = ROOT / "artifacts/p4-cuda/pilot-lock.json"
 CI_LOCK = ROOT / "artifacts/p4/ci-lock.json"
 CURRENT = CONTROL / "current.json"
 
 PROFILE_CONFIGS: dict[str, Path] = {
     "qualification": ROOT / "configs/experiments/p4/qualification.yaml",
     "cuda-qualification": ROOT / "configs/experiments/p4/cuda-qualification.yaml",
+    "cuda-pilot": ROOT / "configs/experiments/p4/cuda-pilot.yaml",
     "pilot": ROOT / "configs/experiments/p4/pilot.yaml",
     "mechanism": ROOT / "configs/experiments/p4/mechanism.yaml",
     "full": ROOT / "configs/experiments/p4/full.yaml",
 }
-PROFILE = Literal["qualification", "cuda-qualification", "pilot", "mechanism", "full"]
+PROFILE = Literal[
+    "qualification",
+    "cuda-qualification",
+    "pilot",
+    "cuda-pilot",
+    "mechanism",
+    "full",
+]
 TERMINAL_STATUSES = {
     "qualification_passed",
     "pilot_passed",
@@ -164,12 +174,15 @@ def _current() -> dict[str, Any]:
     return _json(CURRENT)
 
 
-def _evidence_lock_hashes() -> dict[str, str | None]:
+def _evidence_lock_hashes(profile: PROFILE | None = None) -> dict[str, str | None]:
+    cuda_lane = profile in {"cuda-qualification", "cuda-pilot"}
+    qualification_lock = CUDA_QUALIFICATION_LOCK if cuda_lane else QUALIFICATION_LOCK
+    pilot_lock = CUDA_PILOT_LOCK if cuda_lane else PILOT_LOCK
     return {
-        "qualification_lock_sha256": _sha256(QUALIFICATION_LOCK)
-        if QUALIFICATION_LOCK.is_file()
+        "qualification_lock_sha256": _sha256(qualification_lock)
+        if qualification_lock.is_file()
         else None,
-        "pilot_lock_sha256": _sha256(PILOT_LOCK) if PILOT_LOCK.is_file() else None,
+        "pilot_lock_sha256": _sha256(pilot_lock) if pilot_lock.is_file() else None,
         "mechanism_lock_sha256": _sha256(MECHANISM_LOCK) if MECHANISM_LOCK.is_file() else None,
         "ci_lock_sha256": _sha256(CI_LOCK) if CI_LOCK.is_file() else None,
     }
@@ -256,7 +269,9 @@ def _prepare_runtime(profile: PROFILE, *, head: str) -> tuple[Path, str]:
     raw = yaml.safe_load(PROFILE_CONFIGS[profile].read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError("P4 background config must be a YAML object")
-    if profile in {"pilot", "mechanism", "full"}:
+    if profile == "cuda-pilot":
+        _require_lock(CUDA_QUALIFICATION_LOCK, label="CUDA qualification", head=head)
+    elif profile in {"pilot", "mechanism", "full"}:
         _require_lock(QUALIFICATION_LOCK, label="qualification", head=head)
     if profile in {"mechanism", "full"}:
         pilot_lock = _require_lock(PILOT_LOCK, label="pilot", head=head)
@@ -302,7 +317,9 @@ def _launch_spec(runtime_config: Path) -> dict[str, object]:
     }
 
 
-def _launch(runtime_config: Path, run_id: str, *, resumed: bool) -> dict[str, Any]:
+def _launch(
+    runtime_config: Path, run_id: str, *, profile: PROFILE, resumed: bool
+) -> dict[str, Any]:
     control = CONTROL / run_id
     control.mkdir(parents=True, exist_ok=True)
     log = control / "runner.log"
@@ -330,7 +347,6 @@ def _launch(runtime_config: Path, run_id: str, *, resumed: bool) -> dict[str, An
         raise RuntimeError(
             f"P4 background process exited during launch with code {return_code}: {tail}"
         )
-    profile = load_p4_suite_config(runtime_config).profile
     artifact_directory = ROOT / "artifacts/runs" / run_id
     registry = artifact_directory / "registry.json"
     prior_wall_clock = (
@@ -354,7 +370,7 @@ def _launch(runtime_config: Path, run_id: str, *, resumed: bool) -> dict[str, An
         "git_commit": _git("rev-parse", "HEAD"),
         "runtime_config": str(runtime_config.relative_to(ROOT)),
         "runtime_config_sha256": _sha256(runtime_config),
-        **_evidence_lock_hashes(),
+        **_evidence_lock_hashes(profile),
         "log": str(log.relative_to(ROOT)),
         "command": command,
         "artifact_dir": f"artifacts/runs/{run_id}",
@@ -391,7 +407,7 @@ def start(profile: PROFILE, *, foreground: bool = False) -> dict[str, Any]:
     config = _profile_config(profile)
     head = _background_preflight(config=config, for_resume=False)
     runtime, run_id = _prepare_runtime(profile, head=head)
-    launch = _launch(runtime, run_id, resumed=False)
+    launch = _launch(runtime, run_id, profile=profile, resumed=False)
     launch["phase"] = profile
     entrypoint = ".\\scripts\\p4_run.ps1" if sys.platform == "win32" else "./scripts/p4_run.sh"
     launch["status_command"] = f"{entrypoint} status"
@@ -521,7 +537,8 @@ def resume() -> dict[str, Any]:
     head = _background_preflight(config=config, for_resume=True)
     if current.get("git_commit") != head:
         raise RuntimeError("resume commit does not match the original launch")
-    for name, value in _evidence_lock_hashes().items():
+    profile = cast(PROFILE, current.get("profile"))
+    for name, value in _evidence_lock_hashes(profile).items():
         if current.get(name) != value:
             raise RuntimeError(f"resume evidence lock changed after launch: {name}")
     pid = int(current["pid"])
@@ -535,7 +552,7 @@ def resume() -> dict[str, Any]:
         raise RuntimeError("the P4 run is already complete and cannot be resumed")
     stop_file = _under_root(current.get("artifact_dir"), label="artifact directory") / "STOP"
     stop_file.unlink(missing_ok=True)
-    return _launch(runtime, str(current["run_id"]), resumed=True)
+    return _launch(runtime, str(current["run_id"]), profile=profile, resumed=True)
 
 
 def stop(force: bool) -> dict[str, object]:

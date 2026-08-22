@@ -16,6 +16,7 @@ def test_p4_profile_matrix_sizes_are_frozen() -> None:
     cuda_qualification = load_p4_suite_config(
         Path("configs/experiments/p4/cuda-qualification.yaml")
     )
+    cuda_pilot = load_p4_suite_config(Path("configs/experiments/p4/cuda-pilot.yaml"))
     pilot = load_p4_suite_config(Path("configs/experiments/p4/pilot.yaml"))
     mechanism = load_p4_suite_config(Path("configs/experiments/p4/mechanism.yaml"))
     full = load_p4_suite_config(Path("configs/experiments/p4/full.yaml"))
@@ -26,6 +27,8 @@ def test_p4_profile_matrix_sizes_are_frozen() -> None:
     assert len(build_p4_matrix(full)) == 81
     assert len({cell.cell_id for cell in full.matrix()}) == 81
     assert cuda_qualification.device == "cuda"
+    assert cuda_pilot.device == "cuda"
+    assert len(build_p4_matrix(cuda_pilot)) == 4
     assert P4_PILOT_PRESETS == {
         "preset-0": (1.0e-4, 1.0e-2, 0.05),
         "preset-1": (1.0e-4, 1.0e-2, 0.10),

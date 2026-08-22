@@ -93,3 +93,4 @@ last_updated: 2026-07-26
 | P4-15 | 版本升级 0.5.0 | NOT_STARTED | 仅 GATE-4 PASSED 后执行 |
 | P4-16 | 冻结 protocol-v2 的 mechanism 资源修订与阶段可观测性 | DONE | `CR-005`、48h 配置、evaluation/live-rollout heartbeat、cell 间 MPS cache 清理；不改变科学阈值 |
 | P4-17 | 隔离 accelerator worker、持久化评估分区并建立 Windows/CUDA 工程验证路径 | DONE | `CR-006`；clean implementation SHA `d9a49b86` 的 MPS/CUDA qualification 均 8/8，GitHub Actions `32511375072` 绿色；详见 `reports/p4/execution-isolation.md` |
+| P4-18 | 冻结并运行 Windows CUDA pilot 通道 | IN_PROGRESS | `CR-007`；需新 SHA CI、CUDA qualification 与 4-cell pilot 闭环 |

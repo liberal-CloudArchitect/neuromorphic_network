@@ -252,6 +252,59 @@ def test_cuda_qualification_profile_uses_engineering_cuda_config() -> None:
     assert str(config.control_root).replace("\\", "/").endswith("artifacts/p4-cuda/control")
 
 
+def test_cuda_pilot_profile_uses_cuda_lock_namespace() -> None:
+    config = control._profile_config("cuda-pilot")
+
+    assert config.profile == "pilot"
+    assert config.qualification_only is True
+    assert config.device == "cuda"
+    assert str(config.qualification_report).replace("\\", "/") == (
+        "artifacts/p4-cuda/qualification-lock.json"
+    )
+
+
+def test_cuda_evidence_hashes_do_not_reuse_mps_locks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mps = tmp_path / "artifacts/p4/qualification-lock.json"
+    cuda = tmp_path / "artifacts/p4-cuda/qualification-lock.json"
+    mps.parent.mkdir(parents=True)
+    cuda.parent.mkdir(parents=True)
+    mps.write_text("mps", encoding="utf-8")
+    cuda.write_text("cuda", encoding="utf-8")
+    monkeypatch.setattr(control, "QUALIFICATION_LOCK", mps)
+    monkeypatch.setattr(control, "CUDA_QUALIFICATION_LOCK", cuda)
+    monkeypatch.setattr(control, "CUDA_PILOT_LOCK", tmp_path / "cuda-pilot.json")
+
+    hashes = control._evidence_lock_hashes("cuda-pilot")
+
+    assert hashes["qualification_lock_sha256"] == control._sha256(cuda)
+    assert hashes["qualification_lock_sha256"] != control._sha256(mps)
+
+
+def test_cuda_pilot_runtime_requires_cuda_qualification_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mps_lock = tmp_path / "artifacts/p4/qualification-lock.json"
+    cuda_lock = tmp_path / "artifacts/p4-cuda/qualification-lock.json"
+    mps_lock.parent.mkdir(parents=True)
+    _write_json(mps_lock, {"status": "PASSED", "git_commit": "abc123"})
+    monkeypatch.setattr(control, "ROOT", tmp_path)
+    monkeypatch.setattr(control, "CONTROL", tmp_path / "artifacts/p4/control")
+    monkeypatch.setattr(control, "QUALIFICATION_LOCK", mps_lock)
+    monkeypatch.setattr(control, "CUDA_QUALIFICATION_LOCK", cuda_lock)
+
+    with pytest.raises(RuntimeError, match="CUDA qualification lock is missing"):
+        control._prepare_runtime("cuda-pilot", head="abc123")
+
+    cuda_lock.parent.mkdir(parents=True)
+    _write_json(cuda_lock, {"status": "PASSED", "git_commit": "abc123"})
+    runtime, run_id = control._prepare_runtime("cuda-pilot", head="abc123")
+
+    assert run_id.startswith("p4-cuda-pilot-abc123-")
+    assert control.load_p4_suite_config(runtime).device == "cuda"
+
+
 def test_start_requires_mechanism_lock_for_full(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -341,7 +394,7 @@ def test_resume_rejects_changed_evidence_lock(
     monkeypatch.setattr(
         control,
         "_evidence_lock_hashes",
-        lambda: {
+        lambda profile=None: {
             "qualification_lock_sha256": "different",
             "pilot_lock_sha256": "pilot",
             "mechanism_lock_sha256": "mechanism",

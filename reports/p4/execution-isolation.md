@@ -1,7 +1,9 @@
 # P4 accelerator 执行隔离验证报告
 
-状态：`ENGINEERING PASSED`  
-日期：2026-08-22  
+状态：`ENGINEERING PASSED`
+
+日期：2026-08-22
+
 实现 SHA：`d9a49b861dcd02a0225c221c1fb4c54545924792`
 
 ## 结论
