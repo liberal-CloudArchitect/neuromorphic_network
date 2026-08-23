@@ -263,6 +263,18 @@ def test_cuda_pilot_profile_uses_cuda_lock_namespace() -> None:
     )
 
 
+def test_cuda_mechanism_profile_uses_cuda_lock_namespace() -> None:
+    config = control._profile_config("cuda-mechanism")
+
+    assert config.profile == "mechanism"
+    assert config.qualification_only is False
+    assert config.device == "cuda"
+    assert str(config.qualification_report).replace("\\", "/") == (
+        "artifacts/p4-cuda/qualification-lock.json"
+    )
+    assert str(config.pilot_lock).replace("\\", "/") == ("artifacts/p4-cuda/pilot-lock.json")
+
+
 def test_cuda_evidence_hashes_do_not_reuse_mps_locks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -303,6 +315,41 @@ def test_cuda_pilot_runtime_requires_cuda_qualification_lock(
 
     assert run_id.startswith("p4-cuda-pilot-abc123-")
     assert control.load_p4_suite_config(runtime).device == "cuda"
+
+
+def test_cuda_mechanism_runtime_consumes_cuda_pilot_selection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cuda_qualification = tmp_path / "artifacts/p4-cuda/qualification-lock.json"
+    cuda_pilot = tmp_path / "artifacts/p4-cuda/pilot-lock.json"
+    cuda_qualification.parent.mkdir(parents=True)
+    _write_json(cuda_qualification, {"status": "PASSED", "git_commit": "abc123"})
+    _write_json(
+        cuda_pilot,
+        {
+            "status": "PASSED",
+            "git_commit": "abc123",
+            "selected_preset": "preset-1",
+            "optimizer": {
+                "learning_rate": 0.0001,
+                "weight_decay": 0.01,
+                "temporal_loss_weight": 0.1,
+                "gradient_clip_norm": 1.0,
+            },
+        },
+    )
+    monkeypatch.setattr(control, "ROOT", tmp_path)
+    monkeypatch.setattr(control, "CONTROL", tmp_path / "artifacts/p4/control")
+    monkeypatch.setattr(control, "CUDA_QUALIFICATION_LOCK", cuda_qualification)
+    monkeypatch.setattr(control, "CUDA_PILOT_LOCK", cuda_pilot)
+
+    runtime, run_id = control._prepare_runtime("cuda-mechanism", head="abc123")
+    config = control.load_p4_suite_config(runtime)
+
+    assert run_id.startswith("p4-cuda-mechanism-abc123-")
+    assert config.device == "cuda"
+    assert config.selected_preset == "preset-1"
+    assert config.optimizer.learning_rate == 0.0001
 
 
 def test_start_requires_mechanism_lock_for_full(

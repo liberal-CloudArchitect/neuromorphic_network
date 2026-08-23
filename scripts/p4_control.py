@@ -28,6 +28,7 @@ PILOT_LOCK = ROOT / "artifacts/p4/pilot-lock.json"
 MECHANISM_LOCK = ROOT / "artifacts/p4/mechanism-lock.json"
 CUDA_QUALIFICATION_LOCK = ROOT / "artifacts/p4-cuda/qualification-lock.json"
 CUDA_PILOT_LOCK = ROOT / "artifacts/p4-cuda/pilot-lock.json"
+CUDA_MECHANISM_LOCK = ROOT / "artifacts/p4-cuda/mechanism-lock.json"
 CI_LOCK = ROOT / "artifacts/p4/ci-lock.json"
 CURRENT = CONTROL / "current.json"
 
@@ -35,6 +36,7 @@ PROFILE_CONFIGS: dict[str, Path] = {
     "qualification": ROOT / "configs/experiments/p4/qualification.yaml",
     "cuda-qualification": ROOT / "configs/experiments/p4/cuda-qualification.yaml",
     "cuda-pilot": ROOT / "configs/experiments/p4/cuda-pilot.yaml",
+    "cuda-mechanism": ROOT / "configs/experiments/p4/cuda-mechanism.yaml",
     "pilot": ROOT / "configs/experiments/p4/pilot.yaml",
     "mechanism": ROOT / "configs/experiments/p4/mechanism.yaml",
     "full": ROOT / "configs/experiments/p4/full.yaml",
@@ -44,6 +46,7 @@ PROFILE = Literal[
     "cuda-qualification",
     "pilot",
     "cuda-pilot",
+    "cuda-mechanism",
     "mechanism",
     "full",
 ]
@@ -175,15 +178,16 @@ def _current() -> dict[str, Any]:
 
 
 def _evidence_lock_hashes(profile: PROFILE | None = None) -> dict[str, str | None]:
-    cuda_lane = profile in {"cuda-qualification", "cuda-pilot"}
+    cuda_lane = profile in {"cuda-qualification", "cuda-pilot", "cuda-mechanism"}
     qualification_lock = CUDA_QUALIFICATION_LOCK if cuda_lane else QUALIFICATION_LOCK
     pilot_lock = CUDA_PILOT_LOCK if cuda_lane else PILOT_LOCK
+    mechanism_lock = CUDA_MECHANISM_LOCK if cuda_lane else MECHANISM_LOCK
     return {
         "qualification_lock_sha256": _sha256(qualification_lock)
         if qualification_lock.is_file()
         else None,
         "pilot_lock_sha256": _sha256(pilot_lock) if pilot_lock.is_file() else None,
-        "mechanism_lock_sha256": _sha256(MECHANISM_LOCK) if MECHANISM_LOCK.is_file() else None,
+        "mechanism_lock_sha256": _sha256(mechanism_lock) if mechanism_lock.is_file() else None,
         "ci_lock_sha256": _sha256(CI_LOCK) if CI_LOCK.is_file() else None,
     }
 
@@ -269,12 +273,14 @@ def _prepare_runtime(profile: PROFILE, *, head: str) -> tuple[Path, str]:
     raw = yaml.safe_load(PROFILE_CONFIGS[profile].read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError("P4 background config must be a YAML object")
-    if profile == "cuda-pilot":
+    if profile in {"cuda-pilot", "cuda-mechanism"}:
         _require_lock(CUDA_QUALIFICATION_LOCK, label="CUDA qualification", head=head)
     elif profile in {"pilot", "mechanism", "full"}:
         _require_lock(QUALIFICATION_LOCK, label="qualification", head=head)
-    if profile in {"mechanism", "full"}:
-        pilot_lock = _require_lock(PILOT_LOCK, label="pilot", head=head)
+    if profile in {"mechanism", "full", "cuda-mechanism"}:
+        pilot_path = CUDA_PILOT_LOCK if profile == "cuda-mechanism" else PILOT_LOCK
+        pilot_label = "CUDA pilot" if profile == "cuda-mechanism" else "pilot"
+        pilot_lock = _require_lock(pilot_path, label=pilot_label, head=head)
         selected_preset = pilot_lock.get("selected_preset")
         optimizer = pilot_lock.get("optimizer")
         if not isinstance(selected_preset, str) or not isinstance(optimizer, dict):
