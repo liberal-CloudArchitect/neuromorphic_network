@@ -57,4 +57,3 @@ def test_checkpoint_v5_restores_mps_model_and_network_state(tmp_path: Path) -> N
     assert restored.network_state is not None
     assert restored.network_state.valid_step_counts.device.type == "mps"
     assert restored.network_state.get("predictive_adapter.v3").version == "predictive-state-v3"
-
