@@ -183,9 +183,7 @@ def _scatter_state(base: ModuleState, update: ModuleState, indices: Tensor) -> M
 
 def _scatter_packet(base: BrainPacket, update: BrainPacket, indices: Tensor) -> BrainPacket:
     return BrainPacket(
-        representation=torch.zeros_like(base.representation).index_copy(
-            0, indices, update.representation
-        ),
+        representation=base.representation.clone().index_copy(0, indices, update.representation),
         valid_mask=base.valid_mask,
         modality=base.modality,
         step_index=base.step_index,
@@ -207,6 +205,10 @@ def _slice_context(context: ModuleContext, indices: Tensor) -> ModuleContext:
 
 class ModularBrainNetworkV2(nn.Module):
     """Execute the P4 causal graph without changing the P1--P3 network."""
+
+    module_ids = P4_MODULE_IDS
+    predictive_module_id = PREDICTIVE_ADAPTER_V2
+    router_module_id = SPARSE_ROUTER_V2
 
     def __init__(
         self,
@@ -234,7 +236,7 @@ class ModularBrainNetworkV2(nn.Module):
             action_embedding_dim=action_embedding_dim,
             task_embedding_dim=task_embedding_dim,
         )
-        self.registry.require_complete(P4_MODULE_IDS)
+        self.registry.require_complete(self.module_ids)
 
     def initial_state(
         self,
@@ -316,10 +318,10 @@ class ModularBrainNetworkV2(nn.Module):
         }
         telemetry: list[TelemetryRecord] = list(sensory_output.telemetry_events)
 
-        predictor = cast(PredictiveAdapterV2, self.registry.get(PREDICTIVE_ADAPTER_V2))
+        predictor = cast(PredictiveAdapterV2, self.registry.get(self.predictive_module_id))
         if predictor_mode == "off":
             state = state.replace(
-                predictor.reset_state(state.get(PREDICTIVE_ADAPTER_V2), valid_rows)
+                predictor.reset_state(state.get(self.predictive_module_id), valid_rows)
             )
             predictive_packet = sensory_output.packet
             transition_mask = torch.zeros_like(control.valid_mask)
@@ -327,10 +329,13 @@ class ModularBrainNetworkV2(nn.Module):
             persistence_error = torch.zeros_like(forecast_error)
             feedback_delta = torch.zeros_like(sensory_output.packet.representation)
             forecast_logits = torch.zeros_like(sensory_output.packet.representation)
+            surprise = torch.zeros(
+                (*control.valid_mask.shape, 1), dtype=inputs.dtype, device=inputs.device
+            )
         else:
             consume = predictor.consume(
                 sensory_output.packet,
-                state.get(PREDICTIVE_ADAPTER_V2),
+                state.get(self.predictive_module_id),
                 context,
                 feedback_enabled=predictor_mode not in {"feedback_zero", "acute_feedback_off"},
                 shuffle_forecast=predictor_mode == "shuffle_forecast",
@@ -342,29 +347,44 @@ class ModularBrainNetworkV2(nn.Module):
             persistence_error = consume.persistence_error
             feedback_delta = consume.feedback_delta
             forecast_logits = cast(Tensor, consume.output.prediction_logits)
+            surprise_value = getattr(consume, "surprise", None)
+            surprise = (
+                surprise_value
+                if isinstance(surprise_value, Tensor)
+                else torch.zeros(
+                    (*control.valid_mask.shape, 1), dtype=inputs.dtype, device=inputs.device
+                )
+            )
             if predictor_mode != "loss_zero":
                 _merge_losses(losses, consume.output.auxiliary_losses)
             telemetry.extend(consume.output.telemetry_events)
 
-        router = cast(SparseRouterV2, self.registry.get(SPARSE_ROUTER_V2))
-        decision = router.route(predictive_packet, mode=routing_mode)
-        routing_probabilities = torch.softmax(decision.scores, dim=-1)
-        unreserved = control.valid_mask.unsqueeze(-1) & ~decision.reserved_mask.any(
-            dim=-1, keepdim=True
-        )
-        balance_weight = unreserved.to(routing_probabilities.dtype)
-        balance_count = balance_weight.sum()
-        mean_probability = (routing_probabilities * balance_weight).sum(dim=(0, 1)) / (
-            balance_count.clamp_min(1.0)
-        )
-        imbalance = (mean_probability - 1.0 / len(P4_OPTIONAL_EXPERT_IDS)).square().mean()
-        losses["router.load_balance"] = torch.where(balance_count.gt(0), imbalance, zero)
-        routing_valid = control.valid_mask.unsqueeze(-1).to(routing_probabilities.dtype)
-        losses["router.communication_cost"] = (
-            decision.executed_mask.to(routing_probabilities.dtype)
-            * routing_probabilities
-            * routing_valid
-        ).sum() / routing_valid.sum().clamp_min(1.0)
+        router = cast(SparseRouterV2, self.registry.get(self.router_module_id))
+        decision = router.route(predictive_packet, mode=routing_mode, surprise=surprise)
+        routing_loss_method = getattr(router, "routing_losses", None)
+        if callable(routing_loss_method):
+            _merge_losses(
+                losses,
+                cast(Mapping[str, Tensor], routing_loss_method(predictive_packet, decision)),
+            )
+        else:
+            routing_probabilities = torch.softmax(decision.scores, dim=-1)
+            unreserved = control.valid_mask.unsqueeze(-1) & ~decision.reserved_mask.any(
+                dim=-1, keepdim=True
+            )
+            balance_weight = unreserved.to(routing_probabilities.dtype)
+            balance_count = balance_weight.sum()
+            mean_probability = (routing_probabilities * balance_weight).sum(dim=(0, 1)) / (
+                balance_count.clamp_min(1.0)
+            )
+            imbalance = (mean_probability - 1.0 / len(P4_OPTIONAL_EXPERT_IDS)).square().mean()
+            losses["router.load_balance"] = torch.where(balance_count.gt(0), imbalance, zero)
+            routing_valid = control.valid_mask.unsqueeze(-1).to(routing_probabilities.dtype)
+            losses["router.communication_cost"] = (
+                decision.executed_mask.to(routing_probabilities.dtype)
+                * routing_probabilities
+                * routing_valid
+            ).sum() / routing_valid.sum().clamp_min(1.0)
         expert_packets: dict[str, BrainPacket] = {}
         selected_counts: dict[str, Tensor] = {}
         for expert_index, module_id in enumerate(P4_OPTIONAL_EXPERT_IDS):
@@ -391,7 +411,7 @@ class ModularBrainNetworkV2(nn.Module):
             predictive_packet,
             expert_packets,
             decision,
-            state.get(SPARSE_ROUTER_V2),
+            state.get(self.router_module_id),
             context,
         )
         state = state.replace(router_output.state)
@@ -411,7 +431,7 @@ class ModularBrainNetworkV2(nn.Module):
             state = state.replace(
                 predictor.commit(
                     sensory_output.packet,
-                    state.get(PREDICTIVE_ADAPTER_V2),
+                    state.get(self.predictive_module_id),
                     context,
                     selected_action,
                 )
@@ -420,13 +440,13 @@ class ModularBrainNetworkV2(nn.Module):
         state = state.replace(episodic.commit_pending(state.get(EPISODIC_MEMORY)))
         if torch.any(terminal_mask).item():
             state = state.replace(
-                predictor.reset_state(state.get(PREDICTIVE_ADAPTER_V2), terminal_mask)
+                predictor.reset_state(state.get(self.predictive_module_id), terminal_mask)
             )
         state, detach_mask = state.advance(valid_rows, interval=self.tbptt_interval)
 
         reserved = decision.reserved_mask[:, 0]
-        reserved_count = reserved[..., 0].sum()
-        reserved_executed = (reserved[..., 0] & decision.executed_mask[:, 0, 0]).sum()
+        reserved_count = reserved.any(dim=-1).sum()
+        reserved_executed = (reserved & decision.executed_mask[:, 0]).sum()
         non_reserved = valid_rows & ~reserved.any(dim=-1)
         active_calls = decision.executed_mask[:, 0].to(inputs.dtype).sum()
         if episodic_off:
@@ -441,6 +461,7 @@ class ModularBrainNetworkV2(nn.Module):
             "routing.reserved_tokens": reserved_count,
             "routing.reserved_executed": reserved_executed,
             "routing.learned_tokens": non_reserved.sum(),
+            "routing.dual_tokens": decision.executed_mask[:, 0].sum(dim=-1).gt(1).sum(),
             "forecast.transitions": transition_mask.sum(),
             "forecast.feedback_nonzero": feedback_delta.abs().sum(dim=-1).gt(0).sum(),
             "predictive.transition_count": transition_mask.sum(),
@@ -448,6 +469,7 @@ class ModularBrainNetworkV2(nn.Module):
             "predictive.forecast_error_sum": forecast_error.sum(),
             "predictive.persistence_error_sum": persistence_error.sum(),
             "predictive.feedback_latent_delta_sum": feedback_delta.abs().sum(),
+            "predictive.surprise_sum": surprise.sum(),
         }
         costs = {
             "optional.active_calls": active_calls,

@@ -4,6 +4,7 @@ from neuromorphic.modules.action_selector import ActionSelector
 from neuromorphic.modules.episodic_memory import EpisodicMemory
 from neuromorphic.modules.network import ModularBrainNetwork, ModularBrainOutput
 from neuromorphic.modules.network_v2 import ModularBrainNetworkV2, ModularBrainOutputV2
+from neuromorphic.modules.network_v3 import ModularBrainNetworkV3
 from neuromorphic.modules.predictive_adapter import PredictiveAdapter
 from neuromorphic.modules.predictive_adapter_v2 import PredictiveAdapterV2
 from neuromorphic.modules.sensory_encoder import SensoryEncoder
@@ -16,6 +17,7 @@ __all__ = [
     "EpisodicMemory",
     "ModularBrainNetwork",
     "ModularBrainNetworkV2",
+    "ModularBrainNetworkV3",
     "ModularBrainOutput",
     "ModularBrainOutputV2",
     "PredictiveAdapter",

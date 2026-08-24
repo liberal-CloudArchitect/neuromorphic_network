@@ -145,3 +145,10 @@ last_updated: 2026-07-15
 - `QUAL-P4-CI-002`：同一 implementation SHA 的 GitHub Actions run `32511375072` 成功，完成 CPU lint、format、mypy、pytest 与回归门禁。工程实现、MPS/CUDA qualification 和 CI 的详细边界记录于 `reports/p4/execution-isolation.md`。
 
 P4 的新 SHA pilot、正式机制与完整矩阵仍须在对应报告中另行登记。当前不得授予 network-mvp-v2 标签，也不得把 qualification、旧 pilot 或不完整机制指标解释为科学收益。
+
+## P5 预测 surprise 与稳定语义路由
+
+- `RESULT-P4-CUDA-MECH-001`：clean SHA `6fcc69a52b376234c34604a4cae241ac85923d6d` 的 CUDA mechanism `p4-cuda-mechanism-6fcc69a5-20260823T072800Z` 完成 24/24 cells、823,296 records、554 artifacts 且 checksum 有效；预测质量通过，但预测因果与稀疏最坏 seed 非劣性失败，裁决见 `reports/gates/GATE-4-MECH-CUDA.md`。
+- `ARCH-P5-PRED-001`：`predictive_adapter.v3` 使用 persistence + bounded delta，并只输出 detached surprise 调制路由；禁止把预测误差直接加回当前感觉表示。
+- `ARCH-P5-ROUTE-001`：`sparse_router.v3` 强制 AR episodic 与 DRS working 语义路径，允许每 step 最多 25% DRS rows 双路由，并以 straight-through fusion 和语义 CE 训练 scorer。
+- `QUAL-P5-CPU-001`：dirty-worktree CPU run `p5-qualification-cpu-20260824T044353Z` 完成 12 updates，三任务 loss/gradient 有限，predictor/router 梯度非零，DRS working coverage 100%、dual budget 有界且 forecast error 三任务方向均略优于 persistence；仅为工程资格证据。

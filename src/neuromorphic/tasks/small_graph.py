@@ -12,6 +12,7 @@ from torch import Tensor
 from neuromorphic.tasks.base import (
     CPU_DEVICE,
     P4_SPLIT_SEEDS,
+    P5_SPLIT_SEEDS,
     SPLIT_SEEDS,
     DatasetSplit,
     TaskBatch,
@@ -62,16 +63,24 @@ class SmallGraphTask:
             raise ValueError(f"unknown small-graph distribution: {distribution}")
         self.profile = profile
         self.distribution = distribution
-        if namespace not in {"legacy", "p4"}:
+        if namespace not in {"legacy", "p4", "p5"}:
             raise ValueError(f"unknown task namespace: {namespace}")
         self.namespace = namespace
-        self.split_seeds = P4_SPLIT_SEEDS if namespace == "p4" else SPLIT_SEEDS
+        self.split_seeds = {
+            "legacy": SPLIT_SEEDS,
+            "p4": P4_SPLIT_SEEDS,
+            "p5": P5_SPLIT_SEEDS,
+        }[namespace]
         self.task_version = (
             "small-graph-v1" if distribution == "v1" else f"small-graph-p3-{distribution}-v1"
         )
         if namespace == "p4":
             self.task_version = (
                 "small-graph-p4-v1" if distribution == "v1" else f"small-graph-p4-{distribution}-v1"
+            )
+        elif namespace == "p5":
+            self.task_version = (
+                "small-graph-p5-v1" if distribution == "v1" else f"small-graph-p5-{distribution}-v1"
             )
 
     @staticmethod

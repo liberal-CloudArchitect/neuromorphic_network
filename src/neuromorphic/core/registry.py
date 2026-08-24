@@ -12,6 +12,8 @@ ACTION_SELECTOR: Final = "action_selector.v1"
 SPARSE_ROUTER: Final = "sparse_router.v1"
 PREDICTIVE_ADAPTER_V2: Final = "predictive_adapter.v2"
 SPARSE_ROUTER_V2: Final = "sparse_router.v2"
+PREDICTIVE_ADAPTER_V3: Final = "predictive_adapter.v3"
+SPARSE_ROUTER_V3: Final = "sparse_router.v3"
 
 MODULE_IDS: Final[tuple[str, ...]] = (
     SENSORY_ENCODER,
@@ -31,13 +33,34 @@ P4_MODULE_IDS: Final[tuple[str, ...]] = (
     SPARSE_ROUTER_V2,
 )
 
-ALL_MODULE_IDS: Final[tuple[str, ...]] = (*MODULE_IDS, PREDICTIVE_ADAPTER_V2, SPARSE_ROUTER_V2)
+P5_MODULE_IDS: Final[tuple[str, ...]] = (
+    SENSORY_ENCODER,
+    EPISODIC_MEMORY,
+    WORKING_MEMORY,
+    PREDICTIVE_ADAPTER_V3,
+    ACTION_SELECTOR,
+    SPARSE_ROUTER_V3,
+)
+
+ALL_MODULE_IDS: Final[tuple[str, ...]] = (
+    *MODULE_IDS,
+    PREDICTIVE_ADAPTER_V2,
+    SPARSE_ROUTER_V2,
+    PREDICTIVE_ADAPTER_V3,
+    SPARSE_ROUTER_V3,
+)
 
 P4_OPTIONAL_EXPERT_IDS: Final[tuple[str, ...]] = (EPISODIC_MEMORY, WORKING_MEMORY)
 P4_REQUIRED_PATH_IDS: Final[tuple[str, ...]] = (
     SENSORY_ENCODER,
     PREDICTIVE_ADAPTER_V2,
     SPARSE_ROUTER_V2,
+    ACTION_SELECTOR,
+)
+P5_REQUIRED_PATH_IDS: Final[tuple[str, ...]] = (
+    SENSORY_ENCODER,
+    PREDICTIVE_ADAPTER_V3,
+    SPARSE_ROUTER_V3,
     ACTION_SELECTOR,
 )
 
@@ -69,12 +92,16 @@ __all__ = [
     "P4_MODULE_IDS",
     "P4_OPTIONAL_EXPERT_IDS",
     "P4_REQUIRED_PATH_IDS",
+    "P5_MODULE_IDS",
+    "P5_REQUIRED_PATH_IDS",
     "PREDICTIVE_ADAPTER",
     "PREDICTIVE_ADAPTER_V2",
+    "PREDICTIVE_ADAPTER_V3",
     "REQUIRED_PATH_IDS",
     "SENSORY_ENCODER",
     "SPARSE_ROUTER",
     "SPARSE_ROUTER_V2",
+    "SPARSE_ROUTER_V3",
     "WORKING_MEMORY",
     "is_registered_module",
 ]

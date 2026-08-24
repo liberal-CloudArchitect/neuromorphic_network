@@ -1,7 +1,7 @@
 ---
 title: 项目实施追踪台账
 status: ACTIVE
-last_updated: 2026-07-26
+last_updated: 2026-08-24
 ---
 
 # 项目实施追踪台账
@@ -16,7 +16,8 @@ last_updated: 2026-07-26
 | P1 任务基线与训练骨架 | DONE | GATE-1 PASSED | 三任务、单体基线、恢复与统计已冻结 |
 | P2 模块化类脑网络 | DONE | GATE-2 PASSED | 完整 MPS suite、独立 verifier 与远程 CPU CI 均通过 |
 | P3 因果、泛化与网络 MVP | DONE | GATE-3 PASSED / GATE-NN-MVP FAILED | 科研矩阵完整；当前网络未取得 MVP 资格 |
-| P4 预测闭环与语义稀疏路由 | IN_PROGRESS | GATE-4-QUAL PASSED（v1 历史 SHA） | v1 两次 mechanism 均资源停止；CR-005 / protocol-v2 已冻结 48h 预算，待新 SHA 重新资格化 |
+| P4 预测闭环与语义稀疏路由 | DONE | GATE-4-MECH-CUDA FAILED | 24-cell CUDA mechanism 完整执行；预测因果与稀疏最坏 seed 非劣性被否证，禁止进入 full |
+| P5 预测 surprise 与稳定语义路由 | IN_PROGRESS | qualification pending | v3 模块与 CPU qualification 已落盘，待 clean SHA MPS/CUDA/CI 闭环 |
 
 ## P2 工作项
 
@@ -85,13 +86,27 @@ last_updated: 2026-07-26
 | P4-07 | 实现 chance/OOD/AULC/forgetting 与严格配对统计 | DONE | SmallGraph DP、非法输入和 bootstrap fixture |
 | P4-08 | 实现 qualification/pilot/mechanism/full registry | DONE | 8/4/24/81 cell 配置与完整性测试 |
 | P4-09 | 实现后台 start/status/logs/resume/stop/verify 和阶段锁 | DONE | 控制器单测、clean SHA/CI/MPS/电源/磁盘预检 |
-| P4-10 | CPU/MPS qualification 与独立 GATE-4-QUAL | IN_PROGRESS | clean implementation SHA `d9a49b86` 的 MPS qualification 8/8、checksum 全部有效，且同 SHA CI 绿色；仍须独立复审并生成新的 Gate/lock，不能沿用历史资格锁 |
-| P4-11 | 冻结 pilot 选择 | IN_PROGRESS | SHA `bcbbe9e2` 的 4/4 pilot 选中 `preset-2`；protocol-v2 新 SHA 必须重新生成同 SHA lock |
-| P4-12 | 三 seed 24-cell 机制矩阵与 GATE-4-MECH | IN_PROGRESS | v1 run 分别完成 15/24、8/24，均 `RESOURCE_LIMIT / INCONCLUSIVE`；CR-005 仅将机制预算修订为 48h，并增加阶段 heartbeat/cache 清理 |
+| P4-10 | CPU/MPS/CUDA qualification 与独立工程 Gate | DONE | clean SHA `6fcc69a5` 的 CUDA qualification 8/8、checksum 有效且 CI 绿色；历史 MPS qualification 保留为敏感性证据 |
+| P4-11 | 冻结 pilot 选择 | DONE | clean SHA `6fcc69a5` 的 CUDA pilot 4/4，按冻结规则选择 `preset-3` |
+| P4-12 | 三 seed 24-cell 机制矩阵与 GATE-4-MECH | DONE | CUDA run 24/24、0 工程失败；`GATE-4-MECH-CUDA FAILED`，科学否证而非执行故障 |
 | P4-13 | 81-cell 正式矩阵与 GATE-4 | NOT_STARTED | 仅机制 Gate 通过后启动 |
 | P4-14 | GATE-NN-MVP-v2 与可选 network-mvp-v2 bundle | NOT_STARTED | 只有科学 Gate 通过才生成 bundle |
 | P4-15 | 版本升级 0.5.0 | NOT_STARTED | 仅 GATE-4 PASSED 后执行 |
 | P4-16 | 冻结 protocol-v2 的 mechanism 资源修订与阶段可观测性 | DONE | `CR-005`、48h 配置、evaluation/live-rollout heartbeat、cell 间 MPS cache 清理；不改变科学阈值 |
 | P4-17 | 隔离 accelerator worker、持久化评估分区并建立 Windows/CUDA 工程验证路径 | DONE | `CR-006`；clean implementation SHA `d9a49b86` 的 MPS/CUDA qualification 均 8/8，GitHub Actions `32511375072` 绿色；详见 `reports/p4/execution-isolation.md` |
-| P4-18 | 冻结并运行 Windows CUDA pilot 通道 | IN_PROGRESS | `CR-007`；需新 SHA CI、CUDA qualification 与 4-cell pilot 闭环 |
-| P4-19 | 冻结并运行 Windows CUDA mechanism 通道 | IN_PROGRESS | `CR-008`；需同 SHA CI、CUDA qualification、CUDA pilot 与 24-cell mechanism 闭环 |
+| P4-18 | 冻结并运行 Windows CUDA pilot 通道 | DONE | `CR-007`；同 SHA CI/qualification/pilot 闭环，选择 `preset-3` |
+| P4-19 | 冻结并运行 Windows CUDA mechanism 通道 | DONE | `CR-008`；24/24 完成、checksum 有效、Gate 失败且未生成 mechanism lock |
+
+## P5 工作项
+
+| ID | 工作项 | 状态 | 当前证据 |
+|---|---|---|---|
+| P5-01 | 固化 CUDA mechanism 负结果并冻结新假说 | DONE | `GATE-4-MECH-CUDA`、`CR-009`、`p5_implementation_spec.md` |
+| P5-02 | 实现 residual `predictive_adapter.v3`，移除直接感觉反馈 | DONE | persistence 初始等价、无感觉突变、时序/梯度单测 |
+| P5-03 | 实现语义覆盖、有限 dual-route 与 straight-through `sparse_router.v3` | DONE | AR/DRS coverage、dual budget、zero-drop、scorer gradient 测试 |
+| P5-04 | 实现 `ModularBrainNetworkV3` 与 P1–P4 兼容注册 | DONE | 三任务 forward/backward 与 v2 回归 |
+| P5-05 | 建立 P5 task namespace 与独立 split seeds | DONE | P4/P5 内容哈希隔离测试 |
+| P5-06 | CPU/MPS/CUDA qualification | IN_PROGRESS | dirty-SHA CPU qualification 已通过；待 clean SHA MPS/CUDA 与远程 CI |
+| P5-07 | checkpoint-v5、telemetry-v3 与后台控制 | NOT_STARTED | 不得复用 v4 锁冒充 v5 |
+| P5-08 | 冻结 pilot 与正式 mechanism 统计协议 | NOT_STARTED | qualification 完整后执行 |
+| P5-09 | P5 pilot、三 seed mechanism 与独立 Gate | NOT_STARTED | 科学收益尚未验证 |

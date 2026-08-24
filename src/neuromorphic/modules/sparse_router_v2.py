@@ -101,7 +101,9 @@ class SparseRouterV2(nn.Module):
         packet: BrainPacket,
         *,
         mode: Literal["learned", "dense", "no_reservation", "legacy_capacity"] = "learned",
+        surprise: Tensor | None = None,
     ) -> RoutingDecisionV2:
+        del surprise
         if mode not in {"learned", "dense", "no_reservation", "legacy_capacity"}:
             raise ValueError(f"unsupported routing mode: {mode}")
         scores = self._scores(packet)

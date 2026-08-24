@@ -62,3 +62,6 @@ jobs:
 
       - name: P4 causal-routing CPU qualification
         run: make smoke-p4-ci
+
+      - name: P5 predictive-routing CPU qualification
+        run: make qualify-p5-cpu

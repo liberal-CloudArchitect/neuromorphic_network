@@ -10,7 +10,7 @@ from neuromorphic.tasks.delayed_rule_switch import DelayedRuleSwitchTask
 from neuromorphic.tasks.small_graph import SmallGraphTask
 
 type TaskProfile = Literal["smoke", "qualification"]
-type TaskNamespace = Literal["legacy", "p4"]
+type TaskNamespace = Literal["legacy", "p4", "p5"]
 
 _TASKS: dict[str, type[AssociativeRecallTask | DelayedRuleSwitchTask | SmallGraphTask]] = {
     AssociativeRecallTask.task_id: AssociativeRecallTask,
