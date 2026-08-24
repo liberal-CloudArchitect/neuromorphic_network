@@ -1,4 +1,4 @@
-.PHONY: env env-update lint format-check typecheck test smoke smoke-mps gate0 smoke-p1 smoke-p2-ci smoke-p2-mps smoke-p3-ci qualify-p3-mps smoke-p4-ci qualify-p4-mps qualify-p5-cpu qualify-p5-mps qualify-p5-cuda p3-full-start p3-full-status p3-full-logs p3-full-resume p3-full-stop p3-full-verify p4-start p4-status p4-logs p4-resume p4-stop p4-verify p4-record-ci check
+.PHONY: env env-update lint format-check typecheck test smoke smoke-mps gate0 smoke-p1 smoke-p2-ci smoke-p2-mps smoke-p3-ci qualify-p3-mps smoke-p4-ci qualify-p4-mps qualify-p5-cpu qualify-p5-mps qualify-p5-cuda p3-full-start p3-full-status p3-full-logs p3-full-resume p3-full-stop p3-full-verify p4-start p4-status p4-logs p4-resume p4-stop p4-verify p4-record-ci p5-start p5-status p5-logs p5-resume p5-stop p5-verify p5-record-ci check
 
 CONDA_ENV := brain
 CONDA_RUN := conda run --no-capture-output -n $(CONDA_ENV)
@@ -104,5 +104,28 @@ p4-verify:
 
 p4-record-ci:
 	./scripts/p4_run.sh record-ci
+
+P5_PROFILE ?= qualification-mps
+
+p5-start:
+	./scripts/p5_run.sh start $(P5_PROFILE)
+
+p5-status:
+	./scripts/p5_run.sh status
+
+p5-logs:
+	./scripts/p5_run.sh logs
+
+p5-resume:
+	./scripts/p5_run.sh resume
+
+p5-stop:
+	./scripts/p5_run.sh stop
+
+p5-verify:
+	./scripts/p5_run.sh verify
+
+p5-record-ci:
+	./scripts/p5_run.sh record-ci
 
 check: lint format-check typecheck test smoke

@@ -152,3 +152,6 @@ P4 的新 SHA pilot、正式机制与完整矩阵仍须在对应报告中另行�
 - `ARCH-P5-PRED-001`：`predictive_adapter.v3` 使用 persistence + bounded delta，并只输出 detached surprise 调制路由；禁止把预测误差直接加回当前感觉表示。
 - `ARCH-P5-ROUTE-001`：`sparse_router.v3` 强制 AR episodic 与 DRS working 语义路径，允许每 step 最多 25% DRS rows 双路由，并以 straight-through fusion 和语义 CE 训练 scorer。
 - `QUAL-P5-CPU-001`：dirty-worktree CPU run `p5-qualification-cpu-20260824T044353Z` 完成 12 updates，三任务 loss/gradient 有限，predictor/router 梯度非零，DRS working coverage 100%、dual budget 有界且 forecast error 三任务方向均略优于 persistence；仅为工程资格证据。
+- `ENG-P5-RESUME-001`：checkpoint-v5 在任何 live mutation 前验证 schema、profile/candidate cursor、config/protocol hash、model/optimizer groups、RNG 与 NetworkState；CPU roundtrip 逐位恢复并拒绝错误 hash。
+- `ENG-P5-TELEMETRY-001`：telemetry-v3 记录 detached surprise/semantic/dual/gradient/cost 标量；12-update telemetry off/on 的 loss、validation、forecast 与 routing 逐项一致，事件全部通过 JSON Schema。
+- `PROTO-P5-PILOT-001`：`CR-010` 冻结 seed 7、四个 1,000-update validation-only 候选、每 100 updates checkpoint/validation 和 eligibility→AULC→loss→ID 选择规则；未访问 analysis/test/OOD。

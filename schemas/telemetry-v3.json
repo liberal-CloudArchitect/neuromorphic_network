@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neuromorphic.local/schemas/telemetry-v3.json",
+  "title": "Neuromorphic artificial predictive-routing telemetry v3",
+  "description": "Detached aggregate P5 telemetry. Raw tensors, anatomical atlas, web, and viewer fields are forbidden.",
+  "x-status": "ACCEPTED",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "scientific_disclaimer", "event_id", "run_id", "global_step",
+    "task", "phase", "module_id", "compute_gate", "surprise_count", "surprise_sum",
+    "semantic_required", "semantic_executed", "semantic_coverage", "dual_count",
+    "dual_fraction", "forecast_coverage", "forecast_error", "persistence_error",
+    "scorer_grad_norm", "active_calls", "dense_calls", "metadata"
+  ],
+  "properties": {
+    "schema_version": {"const": "telemetry-v3"},
+    "scientific_disclaimer": {"const": "Artificial computational abstraction telemetry; not biological neural activity, brain tissue, BOLD, or a clinical measurement."},
+    "event_id": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "global_step": {"type": "integer", "minimum": 0},
+    "task": {"type": "string", "minLength": 1},
+    "phase": {"enum": ["train", "evaluate", "replay"]},
+    "module_id": {"const": "sparse_router.v3"},
+    "compute_gate": {"type": "boolean"},
+    "surprise_count": {"type": "integer", "minimum": 0},
+    "surprise_sum": {"type": "number", "minimum": 0},
+    "semantic_required": {"type": "integer", "minimum": 0},
+    "semantic_executed": {"type": "integer", "minimum": 0},
+    "semantic_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+    "dual_count": {"type": "integer", "minimum": 0},
+    "dual_fraction": {"type": "number", "minimum": 0, "maximum": 1},
+    "forecast_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+    "forecast_error": {"type": "number", "minimum": 0},
+    "persistence_error": {"type": "number", "minimum": 0},
+    "scorer_grad_norm": {"type": ["number", "null"], "minimum": 0},
+    "active_calls": {"type": "number", "minimum": 0},
+    "dense_calls": {"type": "number", "minimum": 0},
+    "metadata": {
+      "type": "object",
+      "propertyNames": {"pattern": "^(?!.*(?:atlas|web|viewer)).+$"},
+      "additionalProperties": {
+        "oneOf": [
+          {"type": "string", "maxLength": 256},
+          {"type": "number", "minimum": -1000000000000, "maximum": 1000000000000},
+          {"type": "boolean"},
+          {"type": "null"}
+        ]
+      },
+      "maxProperties": 32
+    }
+  }
+}

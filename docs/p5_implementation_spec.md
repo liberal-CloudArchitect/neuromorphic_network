@@ -33,6 +33,12 @@ scope: mechanism-qualification
 - forecast/persistence 指标只记录方向，不构成科学收益结论；
 - qualification 不访问 analysis/test/OOD，不生成 network MVP。
 
+## Checkpoint、telemetry 与 pilot
+
+`CR-010` 冻结 checkpoint-v5、telemetry-v3、跨平台后台控制和 validation-only pilot。qualification/pilot 采用设备隔离锁；源码 SHA、配置或上游锁变化后必须重建，不得手工改写锁文件。
+
+Pilot 四候选与选择规则已冻结，但尚未在 clean SHA 上运行。Pilot 期间禁止 analysis/test/OOD；只有三个任务的 residual forecast 都优于 persistence 且两机制梯度均有效的候选可参与排序。
+
 ## 后续正式协议待冻结项
 
 在 CUDA/MPS qualification 都通过后，另行冻结 P5 pilot 与 mechanism：
@@ -43,4 +49,4 @@ scope: mechanism-qualification
 - AR/DRS 语义覆盖 100%、dual-route ≤25%、drops=0；
 - seeds `[17,29,43]`、10,000 bootstrap、RNG `20260715`、95% CI 与 Holm p≤0.05。
 
-阈值必须在正式 test/OOD 访问前冻结。checkpoint-v5、telemetry-v3、后台控制和正式矩阵尚未完成，不能把当前 qualification 当成 P5 Gate 通过。
+阈值必须在正式 test/OOD 访问前冻结。正式 mechanism 矩阵、统计报告与 Gate 尚未实现，不能把 qualification 或 pilot 当成科学收益证据。

@@ -235,6 +235,11 @@ def main(arguments: list[str] | None = None) -> int:
             from neuromorphic.training.p5_suite import execute_p5_qualification
 
             result = execute_p5_qualification(load_p5_qualification_config(parsed.config))
+        elif isinstance(raw_config, dict) and raw_config.get("schema_version") == "p5-pilot-v1":
+            from neuromorphic.training.p5_config import load_p5_pilot_config
+            from neuromorphic.training.p5_suite import execute_p5_pilot
+
+            result = execute_p5_pilot(load_p5_pilot_config(parsed.config))
         else:
             result = execute(load_run_config(parsed.config))
     except FloatingPointError as error:

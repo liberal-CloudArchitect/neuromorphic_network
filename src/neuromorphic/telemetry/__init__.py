@@ -12,14 +12,22 @@ from neuromorphic.telemetry.events_v2 import (
     TelemetryV2Event,
     detached_scalar,
 )
+from neuromorphic.telemetry.events_v3 import (
+    SCHEMA_VERSION_V3,
+    SCIENTIFIC_DISCLAIMER_V3,
+    TelemetryV3Event,
+)
 
 __all__ = [
     "SCHEMA_VERSION",
     "SCHEMA_VERSION_V2",
+    "SCHEMA_VERSION_V3",
     "SCIENTIFIC_DISCLAIMER",
     "SCIENTIFIC_DISCLAIMER_V2",
+    "SCIENTIFIC_DISCLAIMER_V3",
     "TelemetryEdge",
     "TelemetryEvent",
     "TelemetryV2Event",
+    "TelemetryV3Event",
     "detached_scalar",
 ]

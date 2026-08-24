@@ -107,6 +107,6 @@ last_updated: 2026-08-24
 | P5-04 | 实现 `ModularBrainNetworkV3` 与 P1–P4 兼容注册 | DONE | 三任务 forward/backward 与 v2 回归 |
 | P5-05 | 建立 P5 task namespace 与独立 split seeds | DONE | P4/P5 内容哈希隔离测试 |
 | P5-06 | CPU/MPS/CUDA qualification | IN_PROGRESS | dirty-SHA CPU qualification 已通过；待 clean SHA MPS/CUDA 与远程 CI |
-| P5-07 | checkpoint-v5、telemetry-v3 与后台控制 | NOT_STARTED | 不得复用 v4 锁冒充 v5 |
-| P5-08 | 冻结 pilot 与正式 mechanism 统计协议 | NOT_STARTED | qualification 完整后执行 |
+| P5-07 | checkpoint-v5、telemetry-v3 与后台控制 | DONE | `CR-010`；原子恢复、schema、on/off 等价、status/resume/verify 定向测试 |
+| P5-08 | 冻结 validation-only pilot | DONE | 四候选、eligibility、AULC 排序与设备锁已冻结；正式 mechanism 仍未冻结 |
 | P5-09 | P5 pilot、三 seed mechanism 与独立 Gate | NOT_STARTED | 科学收益尚未验证 |
