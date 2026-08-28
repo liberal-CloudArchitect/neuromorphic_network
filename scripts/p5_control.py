@@ -20,8 +20,10 @@ import torch
 import yaml
 
 from neuromorphic.training.p5_config import (
+    P5MechanismConfig,
     P5PilotConfig,
     P5QualificationConfig,
+    load_p5_mechanism_config,
     load_p5_pilot_config,
     load_p5_qualification_config,
 )
@@ -35,9 +37,29 @@ PROFILE_CONFIGS = {
     "qualification-cuda": ROOT / "configs/experiments/p5/qualification-cuda.yaml",
     "pilot-mps": ROOT / "configs/experiments/p5/pilot-mps.yaml",
     "pilot-cuda": ROOT / "configs/experiments/p5/pilot-cuda.yaml",
+    "mechanism-ci": ROOT / "configs/experiments/p5/mechanism-ci.yaml",
+    "mechanism-qualification-cuda": ROOT
+    / "configs/experiments/p5/mechanism-qualification-cuda.yaml",
+    "mechanism-cuda": ROOT / "configs/experiments/p5/mechanism-cuda.yaml",
 }
-type Profile = Literal["qualification-mps", "qualification-cuda", "pilot-mps", "pilot-cuda"]
-TERMINAL = {"qualification_passed", "pilot_passed", "pilot_failed", "failed"}
+type Profile = Literal[
+    "qualification-mps",
+    "qualification-cuda",
+    "pilot-mps",
+    "pilot-cuda",
+    "mechanism-ci",
+    "mechanism-qualification-cuda",
+    "mechanism-cuda",
+]
+TERMINAL = {
+    "qualification_passed",
+    "pilot_passed",
+    "pilot_failed",
+    "mechanism_passed",
+    "mechanism_failed",
+    "resource_limit",
+    "failed",
+}
 
 
 def _json(path: Path) -> dict[str, Any]:
@@ -131,16 +153,18 @@ def _under_root(value: object) -> Path:
     return path
 
 
-def _load_profile(path: Path) -> P5QualificationConfig | P5PilotConfig:
+def _load_profile(path: Path) -> P5QualificationConfig | P5PilotConfig | P5MechanismConfig:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError("P5 config must be a YAML object")
     if raw.get("schema_version") == "p5-qualification-v1":
         return load_p5_qualification_config(path)
+    if raw.get("schema_version") == "p5-mechanism-v1":
+        return load_p5_mechanism_config(path)
     return load_p5_pilot_config(path)
 
 
-def _lock_for(config: P5QualificationConfig | P5PilotConfig, name: str) -> Path:
+def _lock_for(config: P5QualificationConfig | P5PilotConfig | P5MechanismConfig, name: str) -> Path:
     return ROOT / config.control_root.parent / f"{name}-lock.json"
 
 
@@ -150,8 +174,17 @@ def _require_lock(path: Path, *, head: str, label: str) -> dict[str, Any]:
     value = _json(path)
     if value.get("status") != "PASSED" or value.get("git_commit") != head:
         raise RuntimeError(f"{label} lock is failed or belongs to another commit")
-    evidence = value.get(f"{label}_report") or value.get(f"{label}_selection")
-    checksum = value.get(f"{label}_report_sha256") or value.get(f"{label}_selection_sha256")
+    evidence_keys = {
+        "qualification": ("qualification_report", "qualification_report_sha256"),
+        "pilot": ("pilot_selection", "pilot_selection_sha256"),
+        "mechanism-qualification": (
+            "mechanism_qualification_report",
+            "mechanism_qualification_report_sha256",
+        ),
+    }
+    evidence_key, checksum_key = evidence_keys[label]
+    evidence = value.get(evidence_key)
+    checksum = value.get(checksum_key)
     if not isinstance(evidence, str) or not isinstance(checksum, str):
         raise RuntimeError(f"{label} lock evidence is incomplete")
     path_value = _under_root(evidence)
@@ -160,15 +193,27 @@ def _require_lock(path: Path, *, head: str, label: str) -> dict[str, Any]:
     return value
 
 
-def _evidence_hashes(config: P5QualificationConfig | P5PilotConfig) -> dict[str, str | None]:
+def _evidence_hashes(
+    config: P5QualificationConfig | P5PilotConfig | P5MechanismConfig,
+) -> dict[str, str | None]:
     qualification = _lock_for(config, "qualification")
+    pilot = _lock_for(config, "pilot")
+    mechanism_qualification = _lock_for(config, "mechanism-qualification")
     return {
         "qualification_lock_sha256": (_sha256(qualification) if qualification.is_file() else None),
+        "pilot_lock_sha256": _sha256(pilot) if pilot.is_file() else None,
+        "mechanism_qualification_lock_sha256": (
+            _sha256(mechanism_qualification) if mechanism_qualification.is_file() else None
+        ),
         "ci_lock_sha256": _sha256(CI_LOCK) if CI_LOCK.is_file() else None,
     }
 
 
-def _preflight(config: P5QualificationConfig | P5PilotConfig, *, for_resume: bool = False) -> str:
+def _preflight(
+    config: P5QualificationConfig | P5PilotConfig | P5MechanismConfig,
+    *,
+    for_resume: bool = False,
+) -> str:
     if _git("status", "--porcelain"):
         raise RuntimeError("P5 background runs require a clean worktree")
     head = _git("rev-parse", "HEAD")
@@ -179,6 +224,18 @@ def _preflight(config: P5QualificationConfig | P5PilotConfig, *, for_resume: boo
         if ci.get("git_commit") != head or ci.get("conclusion") != "success":
             raise RuntimeError("P5 pilot requires a successful same-SHA CI lock")
         _require_lock(_lock_for(config, "qualification"), head=head, label="qualification")
+    if isinstance(config, P5MechanismConfig) and config.device != "cpu":
+        ci = _json(CI_LOCK) if CI_LOCK.is_file() else {}
+        if ci.get("git_commit") != head or ci.get("conclusion") != "success":
+            raise RuntimeError("P5 mechanism requires a successful same-SHA CI lock")
+        _require_lock(_lock_for(config, "qualification"), head=head, label="qualification")
+        _require_lock(_lock_for(config, "pilot"), head=head, label="pilot")
+        if config.profile == "mechanism":
+            _require_lock(
+                _lock_for(config, "mechanism-qualification"),
+                head=head,
+                label="mechanism-qualification",
+            )
     if sys.version_info[:2] != (3, 12) or torch.__version__.split("+")[0] != "2.12.1":
         raise RuntimeError("P5 requires Python 3.12 and PyTorch 2.12.1")
     if config.device == "mps" and not torch.backends.mps.is_available():
@@ -197,11 +254,13 @@ def _preflight(config: P5QualificationConfig | P5PilotConfig, *, for_resume: boo
         current = _json(CURRENT)
         if _alive(int(current.get("pid", -1))):
             raise RuntimeError("another P5 background process is active")
-        if not for_resume and "pilot" in str(current.get("profile")):
+        if not for_resume and any(
+            name in str(current.get("profile")) for name in ("pilot", "mechanism")
+        ):
             directory = _under_root(current.get("artifact_dir"))
             registry = directory / "registry.json"
             if registry.is_file() and _json(registry).get("status") not in TERMINAL:
-                raise RuntimeError("a resumable P5 pilot exists; use resume instead of start")
+                raise RuntimeError("a resumable P5 run exists; use resume instead of start")
     return head
 
 
@@ -212,7 +271,7 @@ def _prepare(profile: Profile, *, head: str) -> tuple[Path, str]:
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     run_id = f"p5-{profile}-{head[:8]}-{timestamp}"
     raw["run_id"] = run_id
-    if raw.get("schema_version") == "p5-pilot-v1":
+    if raw.get("schema_version") in {"p5-pilot-v1", "p5-mechanism-v1"}:
         raw["expected_git_commit"] = head
     runtime = CONTROL / run_id / f"{profile}.runtime.yaml"
     runtime.parent.mkdir(parents=True, exist_ok=True)
@@ -308,7 +367,7 @@ def status() -> dict[str, Any]:
             result["total_cells"] = len(cells)
             result["current_candidate"] = next(
                 (
-                    cell.get("candidate_id")
+                    cell.get("candidate_id", cell.get("cell_id"))
                     for cell in cells
                     if isinstance(cell, dict) and cell.get("status") == "RUNNING"
                 ),
@@ -323,7 +382,9 @@ def status() -> dict[str, Any]:
         result["heartbeat"] = _json(heartbeat)
     result["terminal"] = result["suite_status"] in TERMINAL
     result["resume_allowed"] = (
-        not alive and result["suite_status"] == "stopped" and "pilot" in str(current["profile"])
+        not alive
+        and result["suite_status"] == "stopped"
+        and any(name in str(current["profile"]) for name in ("pilot", "mechanism"))
     )
     result["free_bytes"] = shutil.disk_usage(ROOT).free
     return result
@@ -333,12 +394,12 @@ def resume() -> dict[str, Any]:
     current = _json(CURRENT)
     if _alive(int(current["pid"])):
         raise RuntimeError("P5 process is already active")
-    if "pilot" not in str(current["profile"]):
-        raise RuntimeError("only P5 pilot runs can be resumed")
+    if not any(name in str(current["profile"]) for name in ("pilot", "mechanism")):
+        raise RuntimeError("only P5 pilot or mechanism runs can be resumed")
     directory = _under_root(current["artifact_dir"])
     registry = _json(directory / "registry.json")
     if registry.get("status") != "stopped":
-        raise RuntimeError("P5 pilot is not in a resumable state")
+        raise RuntimeError("P5 run is not in a resumable state")
     original = _under_root(current["runtime_config"])
     raw = yaml.safe_load(original.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):

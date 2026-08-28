@@ -22,6 +22,10 @@ def test_p5_profiles_are_device_scoped() -> None:
     assert str(cuda.qualification_report).replace("\\", "/").startswith("artifacts/p5-cuda/")
     assert mps.device == "mps"
     assert str(mps.qualification_report).replace("\\", "/").startswith("artifacts/p5-mps/")
+    mechanism = control._load_profile(control.PROFILE_CONFIGS["mechanism-cuda"])
+    assert mechanism.device == "cuda"
+    assert mechanism.profile == "mechanism"
+    assert mechanism.mechanism_qualification_report is not None
 
 
 def test_p5_status_distinguishes_running_from_completed_candidates(

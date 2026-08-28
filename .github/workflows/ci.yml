@@ -65,3 +65,6 @@ jobs:
 
       - name: P5 predictive-routing CPU qualification
         run: make qualify-p5-cpu
+
+      - name: P5 mechanism CPU micro matrix
+        run: make smoke-p5-mechanism-ci

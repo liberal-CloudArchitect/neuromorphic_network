@@ -6,8 +6,10 @@ import pytest
 
 from neuromorphic.training.p5_config import (
     P5_PILOT_PRESETS,
+    P5MechanismConfig,
     P5PilotConfig,
     P5QualificationConfig,
+    load_p5_mechanism_config,
     load_p5_pilot_config,
     load_p5_qualification_config,
 )
@@ -47,4 +49,48 @@ def test_p5_pilot_rejects_structural_budget_changes() -> None:
             control_root=Path("artifacts/p5-cuda/control"),
             qualification_report=Path("artifacts/p5-cuda/qualification-lock.json"),
             dual_route_fraction=0.2,
+        )
+
+
+def test_p5_mechanism_matrix_is_eight_cells_per_seed() -> None:
+    micro = load_p5_mechanism_config(Path("configs/experiments/p5/mechanism-ci.yaml"))
+    formal = load_p5_mechanism_config(Path("configs/experiments/p5/mechanism-cuda.yaml"))
+
+    assert len(micro.matrix()) == 8
+    assert len(formal.matrix()) == 24
+    assert sum(cell.retrained for cell in formal.matrix()) == 12
+    assert {cell.variant for cell in micro.matrix()} == {
+        "full",
+        "predictor-off",
+        "surprise-off",
+        "no-dual-route",
+        "acute-surprise-off",
+        "shuffle-surprise",
+        "dense-memory",
+        "no-semantic-reservation",
+    }
+
+
+def test_p5_formal_mechanism_rejects_missing_qualification_lock() -> None:
+    with pytest.raises(ValueError, match="requires qualification and pilot"):
+        P5MechanismConfig(
+            profile="mechanism",
+            device="cuda",
+            seeds=(17, 29, 43),
+            train_samples=8192,
+            validation_samples=2048,
+            analysis_samples=512,
+            test_samples=2048,
+            batch_size=64,
+            steps_per_task=5000,
+            validation_interval=100,
+            checkpoint_interval=100,
+            patience=10,
+            bootstrap_samples=10000,
+            wall_clock_hours=48,
+            selected_preset="preset-1",
+            control_root=Path("artifacts/p5-cuda/control"),
+            mechanism_qualification_report=Path(
+                "artifacts/p5-cuda/mechanism-qualification-lock.json"
+            ),
         )

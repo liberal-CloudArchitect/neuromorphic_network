@@ -41,7 +41,7 @@ Pilot 四候选与选择规则已冻结，但尚未在 clean SHA 上运行。Pil
 
 ## 后续正式协议待冻结项
 
-在 CUDA/MPS qualification 都通过后，另行冻结 P5 pilot 与 mechanism：
+`CR-011` 已冻结 P5 mechanism 的 8-cell/seed 矩阵、预算与 Gate：
 
 - 正式 prediction quality 要求三个任务分别相对 persistence 改善至少 5%；
 - predictive causal macro AULC 至少提高 5%，任一任务/seed 最终下降不超过 2pp；
@@ -49,4 +49,4 @@ Pilot 四候选与选择规则已冻结，但尚未在 clean SHA 上运行。Pil
 - AR/DRS 语义覆盖 100%、dual-route ≤25%、drops=0；
 - seeds `[17,29,43]`、10,000 bootstrap、RNG `20260715`、95% CI 与 Holm p≤0.05。
 
-阈值必须在正式 test/OOD 访问前冻结。正式 mechanism 矩阵、统计报告与 Gate 尚未实现，不能把 qualification 或 pilot 当成科学收益证据。
+正式 mechanism 仅在同 SHA CPU micro、CUDA mechanism qualification、CI、qualification lock 和 pilot lock 全部通过后启动。当前仍不能把 qualification 或 pilot 当成科学收益证据。

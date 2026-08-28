@@ -155,3 +155,5 @@ P4 的新 SHA pilot、正式机制与完整矩阵仍须在对应报告中另行�
 - `ENG-P5-RESUME-001`：checkpoint-v5 在任何 live mutation 前验证 schema、profile/candidate cursor、config/protocol hash、model/optimizer groups、RNG 与 NetworkState；CPU roundtrip 逐位恢复并拒绝错误 hash。
 - `ENG-P5-TELEMETRY-001`：telemetry-v3 记录 detached surprise/semantic/dual/gradient/cost 标量；12-update telemetry off/on 的 loss、validation、forecast 与 routing 逐项一致，事件全部通过 JSON Schema。
 - `PROTO-P5-PILOT-001`：`CR-010` 冻结 seed 7、四个 1,000-update validation-only 候选、每 100 updates checkpoint/validation 和 eligibility→AULC→loss→ID 选择规则；未访问 analysis/test/OOD。
+- `PROTO-P5-MECH-001`：`CR-011` 冻结每 seed 八个 mechanism cells、三 seeds、P5 analysis/test 数据预算、48h 累计墙钟和五项 paired bootstrap/Holm family；CPU/CUDA qualification 使用 seed 7 的 8-cell 缩小镜像。
+- `QUAL-P5-MECH-CPU-001`：dirty-worktree CPU micro 完成 8/8 cells，四个 retrained checkpoint-v5 被四个冻结控制加载，逐样本记录、summary checksum、统计 fixture 与 qualification report 路径均通过；不构成正式机制结论。

@@ -730,13 +730,27 @@ def verify_p5_run(directory: Path) -> dict[str, object]:
     cells = registry.get("cells", [])
     if not isinstance(cells, list):
         raise ValueError("P5 pilot registry cells are invalid")
-    missing = [
-        str(cell.get("candidate_id"))
-        for cell in cells
-        if not isinstance(cell, dict)
-        or cell.get("status") != "COMPLETED"
-        or not (directory / "cells" / str(cell.get("candidate_id")) / "summary.json").is_file()
-    ]
+    missing: list[str] = []
+    for cell in cells:
+        if not isinstance(cell, dict):
+            missing.append("invalid-cell")
+            continue
+        identifier = cell.get("candidate_id", cell.get("cell_id"))
+        summary = directory / "cells" / str(identifier) / "summary.json"
+        records = directory / "cells" / str(identifier) / "sample-records.jsonl"
+        expected_summary = cell.get("summary_sha256")
+        expected_records = cell.get("sample_records_sha256")
+        if (
+            not isinstance(identifier, str)
+            or cell.get("status") != "COMPLETED"
+            or not summary.is_file()
+            or (isinstance(expected_summary, str) and _sha256(summary) != expected_summary)
+            or (
+                isinstance(expected_records, str)
+                and (not records.is_file() or _sha256(records) != expected_records)
+            )
+        ):
+            missing.append(str(identifier))
     return {
         "run_id": registry["run_id"],
         "status": registry["status"],

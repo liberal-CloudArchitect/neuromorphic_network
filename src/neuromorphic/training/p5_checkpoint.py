@@ -37,7 +37,7 @@ P5_CHECKPOINT_VERSION = "p5-checkpoint-v5"
 class P5CheckpointState:
     """All cursors required to resume one P5 qualification or pilot candidate."""
 
-    profile: Literal["qualification", "pilot"]
+    profile: Literal["qualification", "pilot", "mechanism"]
     candidate_id: str
     candidate_index: int
     global_step: int
@@ -54,7 +54,7 @@ class P5CheckpointState:
 
 
 def _validate_state(state: P5CheckpointState) -> None:
-    if state.profile not in {"qualification", "pilot"}:
+    if state.profile not in {"qualification", "pilot", "mechanism"}:
         raise ValueError("invalid P5 checkpoint profile")
     if not state.candidate_id:
         raise ValueError("candidate_id cannot be empty")
@@ -116,7 +116,7 @@ def load_p5_checkpoint(
     *,
     model: nn.Module,
     optimizer: Optimizer,
-    expected_profile: Literal["qualification", "pilot"],
+    expected_profile: Literal["qualification", "pilot", "mechanism"],
     expected_candidate_id: str,
     expected_candidate_index: int,
     expected_config_hash: str,
