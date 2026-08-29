@@ -13,7 +13,7 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def test_p5_pilot_micro_writes_v5_checkpoints_and_selection(tmp_path: Path) -> None:
+def test_p5_pilot_micro_writes_v6_checkpoints_and_selection(tmp_path: Path) -> None:
     commit = subprocess.run(
         ["git", "rev-parse", "HEAD"], text=True, check=True, capture_output=True
     ).stdout.strip()

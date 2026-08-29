@@ -59,6 +59,13 @@ strata 冻结为：Associative Recall 的 pair-count × interference-count bucke
 - 稀疏路由相对 dense-memory：optional MAC 至少下降 20%，各任务下降不超过 2pp，drops 为 0，AR store/query episodic coverage 为 100%。
 - 正式 seeds、bootstrap 次数、RNG、CI 与 Holm 规则保持 `[17,29,43]`、10,000、`20260715`、95% 和 `p_adj≤0.05`。qualification 的 200 次 bootstrap 只验证程序。
 
+### P5 protocol-v2 补充
+
+- 预测与 surprise 因果主指标是 analysis split 上的三任务 macro learning curve；每个 retrained cell 按固定最大 optimizer-step 预算调用 `normalized_aulc`，early stop 后以最后 analysis point延伸到预算终点。
+- validation 只控制 early stop 与 `best.pt`；analysis point 不得参与 checkpoint、preset 或训练时长选择。最终 test 与预测/路由证据均从 `best.pt` 评估。
+- 正式 summary 必须保存完整 analysis points、固定预算和 checkpoint 选择。统计入口必须独立复算 AULC；任一字段缺失、不有限、step 非严格递增、超预算或复算不一致均为无效证据。
+- CR-011 的五项 Holm family、三 seed、10,000 bootstrap、RNG、CI、效应门槛及 task/seed 最坏约束保持不变。
+
 ## 多重比较
 
 - confirmatory family 由同一 Gate 中所有“模型优于主基线”的主指标比较组成；在查看结果前固定 family。

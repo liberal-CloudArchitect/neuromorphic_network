@@ -1,5 +1,5 @@
 schema_version: p5-mechanism-v1
-protocol_version: p5-protocol-v1
+protocol_version: p5-protocol-v2
 profile: mechanism
 device: cuda
 seeds: [17, 29, 43]

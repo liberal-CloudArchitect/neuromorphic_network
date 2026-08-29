@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- 工程阶段：P3 科研完整性已通过但网络 MVP 未通过；P4 正在以独立新协议修复预测闭环与语义稀疏路由。
+- 工程阶段：P3 科研完整性已通过但网络 MVP 未通过；P4 mechanism 已科学失败；P5 正以独立 protocol-v2 修正预测 surprise、语义路由与正式评估有效性。
 - Python 包：`neuromorphic`，版本 `0.4.0`。
 - 本地环境：Conda `brain`、Python 3.12、PyTorch 2.12.1。
 - 本机加速：Apple Silicon MPS；实现必须保持 CPU/CUDA 兼容。
@@ -12,7 +12,8 @@
 - P1 状态：三任务、弱基线、GRU/Transformer、训练/恢复/统计和产物体系已通过 `GATE-1`。
 - P2 状态：六个人工计算模块、真实 top-2 稀疏执行、checkpoint-v2、telemetry 等价及 CPU/MPS 可移植性已通过 `GATE-2`。
 - P3 状态：81-cell、三 seed 正式矩阵与独立统计已完成；`GATE-3 PASSED`，`GATE-NN-MVP FAILED`。
-- P4 状态：`modular-brain-v2`、checkpoint-v4、telemetry-v2、新 split 空间、两级矩阵及后台控制器已实现。`p4-protocol-v1` 的两次 mechanism 分别完成 15/24 和 8/24，均为 `RESOURCE_LIMIT / INCONCLUSIVE`；第二次 run 的完整 seed 17 实测已证明 24 小时预算不可行。`CR-005` 建立 `p4-protocol-v2`，保持科学阈值不变，将 mechanism 上限修订为 48 小时并增加阶段 heartbeat 与 cell 间 MPS cache 清理。
+- P4 状态：`modular-brain-v2`、checkpoint-v4、telemetry-v2 与 CUDA 隔离执行已完成；正式 24/24 mechanism 工程完整，但 `GATE-4-MECH-CUDA FAILED`，预测因果与稀疏最坏 seed 非劣性被否证，未进入 81-cell full。
+- P5 状态：`CR-012` 在正式 mechanism 前升级 `p5-protocol-v2`，修正 fixed-budget analysis AULC、最佳 checkpoint、可复算 summary 与无梯度诊断项；所有旧 SHA 锁失效，待 clean SHA qualification/pilot/mechanism-qualification 全链重建。
 - 模型状态：情景记忆与工作记忆获得 P3 任务内因果支持；预测适配、双基线总体收益和稀疏非劣性仍待 P4 冻结协议检验，当前网络不是 qualified MVP。
 
 ## 快速开始

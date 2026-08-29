@@ -24,7 +24,7 @@ class _StrictModel(BaseModel):
 
 class P5QualificationConfig(_StrictModel):
     schema_version: Literal["p5-qualification-v1"] = "p5-qualification-v1"
-    protocol_version: Literal["p5-protocol-v1"] = "p5-protocol-v1"
+    protocol_version: Literal["p5-protocol-v2"] = "p5-protocol-v2"
     device: Literal["auto", "cpu", "mps", "cuda"] = "auto"
     seed: Literal[7] = 7
     train_samples: Literal[64] = 64
@@ -75,7 +75,7 @@ def load_p5_qualification_config(path: Path) -> P5QualificationConfig:
 
 class P5PilotConfig(_StrictModel):
     schema_version: Literal["p5-pilot-v1"] = "p5-pilot-v1"
-    protocol_version: Literal["p5-protocol-v1"] = "p5-protocol-v1"
+    protocol_version: Literal["p5-protocol-v2"] = "p5-protocol-v2"
     device: Literal["mps", "cuda"]
     seed: Literal[7] = 7
     train_samples: Literal[8192] = 8192
@@ -150,7 +150,7 @@ class P5MechanismCell(_StrictModel):
 
 class P5MechanismConfig(_StrictModel):
     schema_version: Literal["p5-mechanism-v1"] = "p5-mechanism-v1"
-    protocol_version: Literal["p5-protocol-v1"] = "p5-protocol-v1"
+    protocol_version: Literal["p5-protocol-v2"] = "p5-protocol-v2"
     profile: Literal["qualification", "mechanism"]
     device: Literal["cpu", "mps", "cuda"]
     seeds: tuple[int, ...]

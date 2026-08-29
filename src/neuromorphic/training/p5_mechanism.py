@@ -16,6 +16,7 @@ import torch
 from neuromorphic.evaluation.p3_records import p3_sample_records
 from neuromorphic.evaluation.p3_statistics import (
     adjust_family,
+    normalized_aulc,
     paired_hierarchical_bootstrap,
 )
 from neuromorphic.modules.network_v3 import ModularBrainNetworkV3
@@ -65,6 +66,33 @@ def _integer(value: object, *, label: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise ValueError(f"{label} must be a non-negative integer")
     return value
+
+
+def _curve_points(value: object, *, label: str) -> tuple[tuple[int, float], ...]:
+    if not isinstance(value, list | tuple):
+        raise ValueError(f"{label} must be a sequence of [step, value] points")
+    points: list[tuple[int, float]] = []
+    previous_step = -1
+    for point in value:
+        if not isinstance(point, list | tuple) or len(point) != 2:
+            raise ValueError(f"{label} contains an invalid point")
+        step = point[0]
+        if isinstance(step, bool) or not isinstance(step, int) or step < 0 or step <= previous_step:
+            raise ValueError(f"{label} steps must be strictly increasing non-negative integers")
+        metric = _number(point[1], label=f"{label} value")
+        if not 0.0 <= metric <= 1.0:
+            raise ValueError(f"{label} values must lie in [0, 1]")
+        points.append((step, metric))
+        previous_step = step
+    if not points:
+        raise ValueError(f"{label} cannot be empty")
+    return tuple(points)
+
+
+def _analysis_macro_aulc(points: tuple[tuple[int, float], ...], *, maximum_step: int) -> float:
+    """Integrate held-out analysis scores over one fixed training budget."""
+
+    return normalized_aulc(points, maximum_step=maximum_step)
 
 
 def _json(path: Path) -> dict[str, Any]:
@@ -147,6 +175,7 @@ def _registry(config: P5MechanismConfig, run_id: str, commit: str) -> dict[str, 
                 "status": "PENDING",
                 "step": 0,
                 "validation_macro": [],
+                "analysis_macro_curve": [],
             }
             for cell in config.matrix()
         ],
@@ -169,7 +198,9 @@ def _score_records(
     semantic_required = 0.0
     semantic_executed = 0.0
     dual_tokens = 0.0
+    dual_eligible_tokens = 0.0
     valid_tokens = 0.0
+    capacity_drops = 0.0
     model.eval()
     with torch.no_grad():
         for task in _TASKS:
@@ -197,6 +228,9 @@ def _score_records(
                             batch,
                             0.0 if cell.variant == "no-dual-route" else config.dual_route_fraction,
                         )
+                    capacity_drops += float(
+                        sum(decision.capacity_drops for decision in output.routing_trace)
+                    )
                     enriched = p3_sample_records(
                         output,
                         batch,
@@ -229,6 +263,8 @@ def _score_records(
                         output.module_metrics["routing.reserved_executed"].cpu()
                     )
                     dual_tokens += float(output.module_metrics["routing.dual_tokens"].cpu())
+                    if task.task_id == "delayed_rule_switch.v1":
+                        dual_eligible_tokens += float(batch.valid_mask.sum().cpu())
                     valid_tokens += float(batch.valid_mask.sum().cpu())
             prediction[task.task_id] = {
                 "covered": covered,
@@ -246,14 +282,15 @@ def _score_records(
             "semantic_required": semantic_required,
             "semantic_executed": semantic_executed,
             "dual_tokens": dual_tokens,
+            "dual_eligible_tokens": dual_eligible_tokens,
             "valid_tokens": valid_tokens,
-            "capacity_drops": 0,
+            "capacity_drops": capacity_drops,
         },
     }
 
 
 def _parent_checkpoint(directory: Path, seed: int) -> Path:
-    return directory / "cells" / f"full__s{seed}" / "checkpoint.pt"
+    return directory / "cells" / f"full__s{seed}" / "best.pt"
 
 
 def _load_parent(
@@ -283,6 +320,37 @@ def _load_parent(
     )
 
 
+def _mechanism_checkpoint_state(
+    *,
+    cell: P5MechanismCell,
+    cell_index: int,
+    config: P5MechanismConfig,
+    task_steps: Mapping[str, int],
+    completed: int,
+    curve: list[float],
+    analysis_curve: list[tuple[int, float]],
+    best: float,
+    stale: int,
+    last_loss: float | None,
+) -> P5CheckpointState:
+    return P5CheckpointState(
+        profile="mechanism",
+        candidate_id=cell.cell_id,
+        candidate_index=cell_index,
+        global_step=completed,
+        task_steps=task_steps,
+        config_hash=config.config_hash(),
+        protocol_hash=config.protocol_version,
+        best_metrics={"macro": best if math.isfinite(best) else 0.0},
+        validation_macro=tuple(curve),
+        router_gradient_seen=True,
+        predictor_gradient_seen=True,
+        stale_evaluations=stale,
+        last_loss=last_loss,
+        analysis_macro_curve=tuple(analysis_curve),
+    )
+
+
 def _train_cell(
     model: ModularBrainNetworkV3,
     optimizer: torch.optim.Optimizer,
@@ -300,11 +368,16 @@ def _train_cell(
     learning_rate, temporal_weight, semantic_weight = _settings(config)
     del learning_rate
     checkpoint = directory / "cells" / cell.cell_id / "checkpoint.pt"
+    best_checkpoint = directory / "cells" / cell.cell_id / "best.pt"
     checkpoint.parent.mkdir(parents=True, exist_ok=True)
     task_steps = {task.task_id: 0 for task in _TASKS}
     start_step = 0
     curve_value = entry.get("validation_macro", [])
     curve = [float(value) for value in curve_value] if isinstance(curve_value, list) else []
+    analysis_value = entry.get("analysis_curve", entry.get("analysis_macro_curve", []))
+    analysis_curve = (
+        list(_curve_points(analysis_value, label="analysis_macro_curve")) if analysis_value else []
+    )
     best = max(curve) if curve else -math.inf
     stale = 0
     last_loss: float | None = None
@@ -322,6 +395,7 @@ def _train_cell(
         start_step = restored.global_step
         task_steps = dict(restored.task_steps)
         curve = list(restored.validation_macro)
+        analysis_curve = list(restored.analysis_macro_curve)
         best = restored.best_metrics.get("macro", -math.inf)
         stale = restored.stale_evaluations
         last_loss = restored.last_loss
@@ -329,7 +403,12 @@ def _train_cell(
         if time.monotonic() >= deadline:
             raise TimeoutError("P5 mechanism wall-clock budget exhausted")
         if (directory / "STOP").is_file():
-            return {"stopped": True, "steps": step, "validation_macro": curve}
+            return {
+                "stopped": True,
+                "steps": step,
+                "validation_macro": curve,
+                "analysis_curve": tuple(analysis_curve),
+            }
         task = _TASKS[step % len(_TASKS)]
         task_step = task_steps[task.task_id]
         start = task_step * config.batch_size
@@ -357,13 +436,37 @@ def _train_cell(
         completed = step + 1
         entry["step"] = completed
         if completed % config.validation_interval == 0:
-            scores, _ = _validation_summary(model, cast(Any, config), device)
+            scores, _ = _validation_summary(model, cast(Any, config), device, split="validation")
+            analysis_scores, _ = _validation_summary(
+                model, cast(Any, config), device, split="analysis"
+            )
             macro = sum(scores.values()) / len(scores)
+            analysis_macro = round(sum(analysis_scores.values()) / len(analysis_scores), 12)
             curve.append(macro)
+            analysis_curve.append((completed, analysis_macro))
             entry["validation_macro"] = curve
+            entry["analysis_curve"] = [list(point) for point in analysis_curve]
+            entry["analysis_macro_curve"] = entry["analysis_curve"]
             if macro >= best + 0.001:
                 best = macro
                 stale = 0
+                save_p5_checkpoint(
+                    best_checkpoint,
+                    model=model,
+                    optimizer=optimizer,
+                    state=_mechanism_checkpoint_state(
+                        cell=cell,
+                        cell_index=cell_index,
+                        config=config,
+                        task_steps=task_steps,
+                        completed=completed,
+                        curve=curve,
+                        analysis_curve=analysis_curve,
+                        best=best,
+                        stale=stale,
+                        last_loss=last_loss,
+                    ),
+                )
             else:
                 stale += 1
         if completed % config.checkpoint_interval == 0:
@@ -371,19 +474,16 @@ def _train_cell(
                 checkpoint,
                 model=model,
                 optimizer=optimizer,
-                state=P5CheckpointState(
-                    profile="mechanism",
-                    candidate_id=cell.cell_id,
-                    candidate_index=cell_index,
-                    global_step=completed,
+                state=_mechanism_checkpoint_state(
+                    cell=cell,
+                    cell_index=cell_index,
+                    config=config,
                     task_steps=task_steps,
-                    config_hash=config.config_hash(),
-                    protocol_hash=config.protocol_version,
-                    best_metrics={"macro": best if math.isfinite(best) else 0.0},
-                    validation_macro=tuple(curve),
-                    router_gradient_seen=True,
-                    predictor_gradient_seen=True,
-                    stale_evaluations=stale,
+                    completed=completed,
+                    curve=curve,
+                    analysis_curve=analysis_curve,
+                    best=best,
+                    stale=stale,
                     last_loss=last_loss,
                 ),
             )
@@ -399,7 +499,7 @@ def _train_cell(
             )
             registry["wall_clock_seconds"] = prior_wall_clock + time.monotonic() - suite_started
             _write_json(directory / "registry.json", registry)
-        if config.profile == "mechanism" and stale >= config.patience:
+        if stale >= config.patience:
             break
     completed = _integer(entry.get("step", 0), label="cell step")
     if not checkpoint.is_file() or completed % config.checkpoint_interval != 0:
@@ -407,28 +507,102 @@ def _train_cell(
             checkpoint,
             model=model,
             optimizer=optimizer,
-            state=P5CheckpointState(
-                profile="mechanism",
-                candidate_id=cell.cell_id,
-                candidate_index=cell_index,
-                global_step=completed,
+            state=_mechanism_checkpoint_state(
+                cell=cell,
+                cell_index=cell_index,
+                config=config,
                 task_steps=task_steps,
-                config_hash=config.config_hash(),
-                protocol_hash=config.protocol_version,
-                best_metrics={"macro": best if math.isfinite(best) else 0.0},
-                validation_macro=tuple(curve),
-                router_gradient_seen=True,
-                predictor_gradient_seen=True,
-                stale_evaluations=stale,
+                completed=completed,
+                curve=curve,
+                analysis_curve=analysis_curve,
+                best=best,
+                stale=stale,
                 last_loss=last_loss,
             ),
         )
+    if not best_checkpoint.is_file():
+        raise RuntimeError("P5 mechanism cell did not produce a best checkpoint")
+    load_p5_checkpoint(
+        best_checkpoint,
+        model=model,
+        optimizer=optimizer,
+        expected_profile="mechanism",
+        expected_candidate_id=cell.cell_id,
+        expected_candidate_index=cell_index,
+        expected_config_hash=config.config_hash(),
+        expected_protocol_hash=config.protocol_version,
+        restore_rng=False,
+    )
     return {
         "steps": completed,
         "validation_macro": curve,
-        "macro_aulc": sum(curve) / max(len(curve), 1),
+        "analysis_curve": tuple(analysis_curve),
+        "analysis_budget_steps": cell.max_steps,
+        "analysis_macro_aulc": _analysis_macro_aulc(
+            tuple(analysis_curve), maximum_step=cell.max_steps
+        ),
+        "selected_checkpoint": "best.pt",
         "last_loss": last_loss,
     }
+
+
+def _summary_mapping(value: object, *, label: str) -> Mapping[str, object]:
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{label} is invalid")
+    return cast(Mapping[str, object], value)
+
+
+def _summary_scores(summary: Mapping[str, object], *, label: str) -> dict[str, float]:
+    scores = _summary_mapping(summary.get("test_scores"), label=f"{label} test_scores")
+    result = {
+        task_id: _number(scores.get(task_id), label=f"{label} test_scores[{task_id}]")
+        for task_id in _METRIC_KEYS
+    }
+    if any(not 0.0 <= value <= 1.0 for value in result.values()):
+        raise ValueError(f"{label} test scores must lie in [0, 1]")
+    return result
+
+
+def _summary_prediction(
+    summary: Mapping[str, object], *, label: str
+) -> dict[str, dict[str, float]]:
+    prediction = _summary_mapping(summary.get("prediction"), label=f"{label} prediction")
+    result: dict[str, dict[str, float]] = {}
+    for task_id in _METRIC_KEYS:
+        values = _summary_mapping(prediction.get(task_id), label=f"{label} prediction[{task_id}]")
+        result[task_id] = {
+            "forecast_error": _number(
+                values.get("forecast_error"),
+                label=f"{label} prediction[{task_id}].forecast_error",
+            ),
+            "persistence_error": _number(
+                values.get("persistence_error"),
+                label=f"{label} prediction[{task_id}].persistence_error",
+            ),
+        }
+        if min(result[task_id].values()) < 0.0:
+            raise ValueError(f"{label} prediction errors must be non-negative")
+    return result
+
+
+def _summary_routing(summary: Mapping[str, object], *, label: str) -> dict[str, float]:
+    routing = _summary_mapping(summary.get("routing"), label=f"{label} routing")
+    result = {
+        name: _number(routing.get(name), label=f"{label} routing[{name}]")
+        for name in (
+            "active_macs",
+            "dense_macs",
+            "semantic_required",
+            "semantic_executed",
+            "dual_tokens",
+            "dual_eligible_tokens",
+            "valid_tokens",
+            "capacity_drops",
+        )
+    }
+    if min(result.values()) < 0.0:
+        raise ValueError(f"{label} routing values must be non-negative")
+    return result
 
 
 def _paired_records(
@@ -468,11 +642,32 @@ def _formal_evidence(
     directory: Path,
     summaries: Mapping[str, Mapping[str, object]],
 ) -> dict[str, object]:
+    analysis_budget = config.steps_per_task * len(_TASKS)
+    for seed in config.seeds:
+        for variant in ("full", "predictor-off", "surprise-off", "no-dual-route"):
+            cell_id = f"{variant}__s{seed}"
+            summary = summaries[cell_id]
+            if summary.get("selected_checkpoint") != "best.pt":
+                raise ValueError(f"{cell_id} did not select the best checkpoint")
+            budget = _integer(
+                summary.get("analysis_budget_steps"),
+                label=f"{cell_id} analysis_budget_steps",
+            )
+            if budget != analysis_budget:
+                raise ValueError(f"{cell_id} analysis budget does not match the frozen budget")
+            curve = _curve_points(summary.get("analysis_curve"), label=f"{cell_id} analysis_curve")
+            recomputed = _analysis_macro_aulc(curve, maximum_step=budget)
+            recorded = _number(
+                summary.get("analysis_macro_aulc"),
+                label=f"{cell_id} analysis_macro_aulc",
+            )
+            if not math.isclose(recomputed, recorded, rel_tol=0.0, abs_tol=1.0e-12):
+                raise ValueError(f"{cell_id} analysis AULC cannot be independently reproduced")
     surprise_left, surprise_right = _paired_records(
         summaries,
         left="full",
         right="surprise-off",
-        field="macro_aulc",
+        field="analysis_macro_aulc",
         seeds=config.seeds,
         relative=True,
     )
@@ -480,7 +675,7 @@ def _formal_evidence(
         summaries,
         left="full",
         right="predictor-off",
-        field="macro_aulc",
+        field="analysis_macro_aulc",
         seeds=config.seeds,
         relative=True,
     )
@@ -523,24 +718,24 @@ def _formal_evidence(
     predictor_deltas: dict[str, float] = {}
     dense_deltas: dict[str, float] = {}
     prediction_improvements: dict[str, float] = {}
-    active = dense = required = executed = dual_tokens = valid = 0.0
+    active = dense = required = executed = dual_tokens = dual_eligible = capacity_drops = 0.0
     for seed in config.seeds:
         full = summaries[f"full__s{seed}"]
+        full_scores = _summary_scores(full, label=f"full__s{seed}")
+        full_prediction = _summary_prediction(full, label=f"full__s{seed}")
         for comparator, delta_target in (
             ("surprise-off", final_deltas),
             ("dense-memory", dense_deltas),
         ):
             other = summaries[f"{comparator}__s{seed}"]
-            for task_id, score in cast(Mapping[str, float], full["test_scores"]).items():
-                delta_target[f"s{seed}:{task_id}"] = (
-                    score - cast(Mapping[str, float], other["test_scores"])[task_id]
-                )
+            other_scores = _summary_scores(other, label=f"{comparator}__s{seed}")
+            for task_id, score in full_scores.items():
+                delta_target[f"s{seed}:{task_id}"] = score - other_scores[task_id]
         predictor_other = summaries[f"predictor-off__s{seed}"]
-        for task_id, score in cast(Mapping[str, float], full["test_scores"]).items():
-            predictor_deltas[f"s{seed}:{task_id}"] = (
-                score - cast(Mapping[str, float], predictor_other["test_scores"])[task_id]
-            )
-        for task_id, values in cast(Mapping[str, Mapping[str, float]], full["prediction"]).items():
+        predictor_scores = _summary_scores(predictor_other, label=f"predictor-off__s{seed}")
+        for task_id, score in full_scores.items():
+            predictor_deltas[f"s{seed}:{task_id}"] = score - predictor_scores[task_id]
+        for task_id, values in full_prediction.items():
             persistence = values["persistence_error"]
             improvement = (persistence - values["forecast_error"]) / max(persistence, 1.0e-12)
             prediction_improvements[f"s{seed}:{task_id}"] = improvement
@@ -555,13 +750,14 @@ def _formal_evidence(
             }
             forecast_left.append({**common, "variant_id": "forecast", "value": improvement})
             forecast_right.append({**common, "variant_id": "persistence", "value": 0.0})
-        routing = cast(Mapping[str, float], full["routing"])
+        routing = _summary_routing(full, label=f"full__s{seed}")
         active += routing["active_macs"]
         dense += routing["dense_macs"]
         required += routing["semantic_required"]
         executed += routing["semantic_executed"]
         dual_tokens += routing["dual_tokens"]
-        valid += routing["valid_tokens"]
+        dual_eligible += routing["dual_eligible_tokens"]
+        capacity_drops += routing["capacity_drops"]
     mac_reduction = 1.0 - active / max(dense, 1.0)
     forecast_bootstrap = paired_hierarchical_bootstrap(
         forecast_left, forecast_right, samples=config.bootstrap_samples
@@ -588,7 +784,9 @@ def _formal_evidence(
         and mac_reduction >= 0.20
         and required > 0
         and executed == required
-        and dual_tokens / max(valid, 1.0) <= 0.25
+        and dual_eligible > 0
+        and dual_tokens / dual_eligible <= 0.25
+        and capacity_drops == 0
     )
     return {
         "status": "PASSED" if passed else "FAILED",
@@ -603,7 +801,8 @@ def _formal_evidence(
         "minimum_prediction_improvement": min(prediction_improvements.values()),
         "mac_reduction": mac_reduction,
         "semantic_coverage": executed / max(required, 1.0),
-        "dual_fraction": dual_tokens / max(valid, 1.0),
+        "dual_fraction": dual_tokens / max(dual_eligible, 1.0),
+        "capacity_drops": capacity_drops,
     }
 
 
@@ -708,7 +907,14 @@ def execute_p5_mechanism(config: P5MechanismConfig) -> dict[str, Any]:
                 return {"run_id": run_id, "status": "stopped", "artifact_dir": str(directory)}
         else:
             _load_parent(directory, cell, config, model, optimizer)
-            training = {"steps": 0, "validation_macro": [], "macro_aulc": 0.0}
+            training = {
+                "steps": 0,
+                "validation_macro": [],
+                "analysis_curve": [],
+                "analysis_budget_steps": 0,
+                "analysis_macro_aulc": 0.0,
+                "selected_checkpoint": "full-best.pt",
+            }
         try:
             records, evaluation = _score_records(model, cell, config, device, deadline)
         except TimeoutError:
@@ -730,12 +936,15 @@ def execute_p5_mechanism(config: P5MechanismConfig) -> dict[str, Any]:
             ]
             test_scores[task_id] = sum(values) / max(len(values), 1)
         summary = {
-            "schema_version": "p5-mechanism-cell-v1",
+            "schema_version": "p5-mechanism-cell-v2",
             "cell_id": cell.cell_id,
             "variant": cell.variant,
             "seed": cell.seed,
             "steps": training.get("steps", 0),
-            "macro_aulc": training.get("macro_aulc", 0.0),
+            "analysis_curve": training.get("analysis_curve", []),
+            "analysis_budget_steps": training.get("analysis_budget_steps", 0),
+            "analysis_macro_aulc": training.get("analysis_macro_aulc", 0.0),
+            "selected_checkpoint": training.get("selected_checkpoint"),
             "drs_score": test_scores["delayed_rule_switch.v1"],
             "test_scores": test_scores,
             **evaluation,
@@ -787,7 +996,7 @@ def execute_p5_mechanism(config: P5MechanismConfig) -> dict[str, Any]:
         _write_json(
             report_path,
             {
-                "schema_version": "p5-mechanism-report-v1",
+                "schema_version": "p5-mechanism-report-v2",
                 "run_id": run_id,
                 "git_commit": commit,
                 "git_dirty": bool(_git("status", "--porcelain")),

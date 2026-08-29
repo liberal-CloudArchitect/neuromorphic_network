@@ -8,13 +8,14 @@ import math
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import torch
 from torch import Tensor
 from torch.nn import functional as F
 
 from neuromorphic.core.registry import PREDICTIVE_ADAPTER_V3, SPARSE_ROUTER_V3
+from neuromorphic.evaluation.p3_statistics import normalized_aulc
 from neuromorphic.modules.network_v3 import ModularBrainNetworkV3
 from neuromorphic.tasks.associative_recall import AssociativeRecallTask
 from neuromorphic.tasks.base import TaskBatch
@@ -136,7 +137,11 @@ def _weighted_loss(
     primary = _primary_loss(output.logits, batch)
     weights = {
         "episodic.retrieval": 0.1,
-        "episodic.separation": 0.01,
+        # P5 keeps these hard-path quantities as diagnostics.  The AR keys are
+        # fixed one-hot values and the executed routing mask is discrete, so a
+        # non-zero optimizer weight would change the reported scalar without
+        # providing a faithful gradient to train either mechanism.
+        "episodic.separation": 0.0,
         "working.state_consistency": 0.05,
         "working.gate_regularization": 0.001,
         "predictive.temporal": (
@@ -149,7 +154,7 @@ def _weighted_loss(
             config.dual_budget_weight if dual_budget_weight is None else dual_budget_weight
         ),
         "router.load_balance": 0.01,
-        "router.communication_cost": 0.001,
+        "router.communication_cost": 0.0,
     }
     total = primary
     values = {"primary": float(primary.detach().cpu())}
@@ -349,7 +354,16 @@ def _validation_summary(
     model: ModularBrainNetworkV3,
     config: P5PilotConfig,
     device: torch.device,
+    *,
+    split: Literal["validation", "analysis"] = "validation",
 ) -> tuple[dict[str, float], dict[str, dict[str, float]]]:
+    sample_count = (
+        config.validation_samples
+        if split == "validation"
+        else cast(int, getattr(config, "analysis_samples", 0))
+    )
+    if sample_count <= 0:
+        raise ValueError("analysis evaluation requires a positive analysis_samples budget")
     scores: dict[str, float] = {}
     forecast: dict[str, dict[str, float]] = {}
     model.eval()
@@ -360,11 +374,9 @@ def _validation_summary(
             covered = 0.0
             error_sum = 0.0
             persistence_sum = 0.0
-            for start in range(0, config.validation_samples, config.batch_size):
-                indices = list(
-                    range(start, min(start + config.batch_size, config.validation_samples))
-                )
-                batch = task.generate("validation", indices, device=device)
+            for start in range(0, sample_count, config.batch_size):
+                indices = list(range(start, min(start + config.batch_size, sample_count)))
+                batch = task.generate(split, indices, device=device)
                 output = model.forward_batch(batch, phase="evaluate")
                 _check_routing(output, batch, config.dual_route_fraction)
                 optimal = batch.auxiliary_targets.get("optimal_action_mask")
@@ -393,6 +405,24 @@ def _validation_summary(
             }
     model.train()
     return scores, forecast
+
+
+def _validation_macro_aulc(
+    curve: list[float], *, validation_interval: int, max_steps: int
+) -> float:
+    if not curve:
+        return 0.0
+    if validation_interval <= 0 or max_steps <= 0:
+        raise ValueError("validation AULC requires positive interval and budget")
+    points: list[tuple[int, float]] = []
+    for index, value in enumerate(curve, start=1):
+        if not math.isfinite(value):
+            raise ValueError("validation AULC requires finite curve values")
+        step = index * validation_interval
+        if step > max_steps:
+            raise ValueError("validation AULC curve exceeds the fixed budget")
+        points.append((step, value))
+    return normalized_aulc(points, maximum_step=max_steps)
 
 
 def _pilot_registry(config: P5PilotConfig, run_id: str, commit: str) -> dict[str, object]:
@@ -625,7 +655,11 @@ def execute_p5_pilot(config: P5PilotConfig) -> dict[str, Any]:
             },
             "eligible": eligible,
             "validation_scores": scores,
-            "validation_macro_aulc": sum(curve) / max(len(curve), 1),
+            "validation_macro_aulc": _validation_macro_aulc(
+                curve,
+                validation_interval=config.validation_interval,
+                max_steps=config.steps_per_preset,
+            ),
             "final_loss": sum(losses[-10:]) / max(len(losses[-10:]), 1),
             "forecast": forecast,
             "router_gradient_seen": router_gradient_seen,

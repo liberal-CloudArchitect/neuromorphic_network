@@ -34,10 +34,11 @@ def _state(model: ModularBrainNetworkV3) -> P5CheckpointState:
         stale_evaluations=2,
         last_loss=1.25,
         network_state=model.initial_state(2, device=torch.device("cpu"), dtype=torch.float32),
+        analysis_macro_curve=((100, 0.3), (200, 0.45)),
     )
 
 
-def test_checkpoint_v5_roundtrip_restores_model_optimizer_state_and_rng(tmp_path: Path) -> None:
+def test_checkpoint_v6_roundtrip_restores_model_optimizer_state_and_rng(tmp_path: Path) -> None:
     torch.manual_seed(7)
     model = ModularBrainNetworkV3()
     optimizer = torch.optim.AdamW(model.parameters(), lr=3.0e-4)
@@ -70,6 +71,7 @@ def test_checkpoint_v5_roundtrip_restores_model_optimizer_state_and_rng(tmp_path
     assert restored.candidate_id == state.candidate_id
     assert restored.global_step == state.global_step
     assert restored.task_steps == state.task_steps
+    assert restored.analysis_macro_curve == state.analysis_macro_curve
     assert restored.network_state is not None
     assert state.network_state is not None
     torch.testing.assert_close(
@@ -83,7 +85,7 @@ def test_checkpoint_v5_roundtrip_restores_model_optimizer_state_and_rng(tmp_path
     torch.testing.assert_close(torch.rand(4), expected_random, rtol=0.0, atol=0.0)
 
 
-def test_checkpoint_v5_rejects_hash_before_mutating_model(tmp_path: Path) -> None:
+def test_checkpoint_v6_rejects_hash_before_mutating_model(tmp_path: Path) -> None:
     model = ModularBrainNetworkV3()
     optimizer = torch.optim.AdamW(model.parameters(), lr=3.0e-4)
     state = _state(model)

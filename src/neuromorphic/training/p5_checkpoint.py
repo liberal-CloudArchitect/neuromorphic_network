@@ -1,4 +1,4 @@
-"""Strict atomic checkpoint-v5 persistence for P5 qualification and pilot runs."""
+"""Strict atomic checkpoint-v6 persistence for P5 qualification and experiment runs."""
 
 from __future__ import annotations
 
@@ -30,12 +30,12 @@ from neuromorphic.training.p4_checkpoint import (
 )
 from neuromorphic.training.reproducibility import capture_rng_state, restore_rng_state
 
-P5_CHECKPOINT_VERSION = "p5-checkpoint-v5"
+P5_CHECKPOINT_VERSION = "p5-checkpoint-v6"
 
 
 @dataclass(frozen=True, slots=True)
 class P5CheckpointState:
-    """All cursors required to resume one P5 qualification or pilot candidate."""
+    """All cursors required to resume one P5 qualification, pilot, or mechanism cell."""
 
     profile: Literal["qualification", "pilot", "mechanism"]
     candidate_id: str
@@ -51,6 +51,7 @@ class P5CheckpointState:
     stale_evaluations: int
     last_loss: float | None
     network_state: NetworkState | None = None
+    analysis_macro_curve: tuple[tuple[int, float], ...] = ()
 
 
 def _validate_state(state: P5CheckpointState) -> None:
@@ -70,6 +71,21 @@ def _validate_state(state: P5CheckpointState) -> None:
             raise ValueError("P5 checkpoint best metric is invalid")
     if any(not math.isfinite(value) for value in state.validation_macro):
         raise ValueError("P5 checkpoint validation curve is invalid")
+    previous_step = -1
+    for point in state.analysis_macro_curve:
+        if (
+            not isinstance(point, tuple)
+            or len(point) != 2
+            or isinstance(point[0], bool)
+            or not isinstance(point[0], int)
+            or point[0] < 0
+            or point[0] <= previous_step
+            or isinstance(point[1], bool)
+            or not isinstance(point[1], int | float)
+            or not math.isfinite(float(point[1]))
+        ):
+            raise ValueError("P5 checkpoint analysis curve is invalid")
+        previous_step = point[0]
     if state.last_loss is not None and not math.isfinite(state.last_loss):
         raise ValueError("P5 checkpoint loss must be finite")
 
@@ -157,6 +173,26 @@ def load_p5_checkpoint(
         for value in curve
     ):
         raise CheckpointCompatibilityError("P5 checkpoint validation curve is invalid")
+    analysis_curve = payload.get("analysis_macro_curve")
+    if not isinstance(analysis_curve, tuple):
+        raise CheckpointCompatibilityError("P5 checkpoint analysis curve is invalid")
+    normalized_analysis_curve: list[tuple[int, float]] = []
+    previous_step = -1
+    for point in analysis_curve:
+        if (
+            not isinstance(point, tuple)
+            or len(point) != 2
+            or isinstance(point[0], bool)
+            or not isinstance(point[0], int)
+            or point[0] < 0
+            or point[0] <= previous_step
+            or isinstance(point[1], bool)
+            or not isinstance(point[1], int | float)
+            or not math.isfinite(float(point[1]))
+        ):
+            raise CheckpointCompatibilityError("P5 checkpoint analysis curve is invalid")
+        normalized_analysis_curve.append((point[0], float(point[1])))
+        previous_step = point[0]
     for name in ("router_gradient_seen", "predictor_gradient_seen"):
         if not isinstance(payload.get(name), bool):
             raise CheckpointCompatibilityError(f"P5 checkpoint {name} is invalid")
@@ -210,6 +246,7 @@ def load_p5_checkpoint(
         stale_evaluations=int(payload["stale_evaluations"]),
         last_loss=None if last_loss is None else float(last_loss),
         network_state=network_state,
+        analysis_macro_curve=tuple(normalized_analysis_curve),
     )
     try:
         _validate_state(restored)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 
+import pytest
 import torch
 
 from neuromorphic.core.contracts import BrainPacket, ModuleContext
@@ -102,3 +103,23 @@ def test_v3_semantic_loss_and_straight_through_fusion_train_scorer() -> None:
     assert module.scorer.weight.grad is not None
     assert torch.isfinite(module.scorer.weight.grad).all()
     assert module.scorer.weight.grad.abs().sum().item() > 0.0
+
+
+def test_v3_dual_route_selection_avoids_host_scalar_sync(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = SparseRouterV3(feature_dim=8, task_embedding_dim=4, dual_route_fraction=0.25)
+    packet = _packet(task=1, batch=7, steps=3)
+    packet.valid_mask[:, 1] = torch.tensor([True, True, True, True, True, False, False])
+    packet.valid_mask[:, 2] = torch.tensor([True, True, True, False, False, False, False])
+
+    def forbidden_item(tensor: torch.Tensor) -> object:
+        del tensor
+        raise AssertionError("routing must not synchronize a device scalar through Tensor.item()")
+
+    monkeypatch.setattr(torch.Tensor, "item", forbidden_item)
+
+    decision = module.route(packet, surprise=torch.zeros(7, 3, 1))
+
+    dual_per_step = decision.executed_mask.sum(dim=-1).gt(1).sum(dim=0)
+    torch.testing.assert_close(dual_per_step, torch.tensor([1, 1, 0]))

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from collections.abc import Mapping
 from typing import Literal, cast
 
@@ -119,19 +118,25 @@ class SparseRouterV3(SparseRouterV2):
             )
             ambiguity = -torch.abs(scores[..., 0] - scores[..., 1])
             priority = ambiguity + self.surprise_weight * surprise_values
-            for step in range(scores.shape[1]):
-                candidates = is_drs[:, step] & packet.valid_mask[:, step]
-                count = int(candidates.sum().item())
-                if count == 0:
-                    continue
-                quota = min(count, math.floor(count * self.dual_route_fraction))
-                if quota == 0:
-                    continue
-                ranked = torch.argsort(priority[:, step], descending=True, stable=True)
-                ranked = ranked[candidates.index_select(0, ranked)]
-                chosen = ranked[:quota]
-                learned[chosen, step, 0] = True
-                raw[chosen, step, 0] = True
+            candidates = is_drs & packet.valid_mask
+            counts = candidates.to(torch.long).sum(dim=0)
+            quotas = torch.floor(counts.to(priority.dtype) * self.dual_route_fraction).to(
+                torch.long
+            )
+            ranked = torch.argsort(
+                priority.masked_fill(~candidates, -torch.inf).transpose(0, 1),
+                dim=-1,
+                descending=True,
+                stable=True,
+            )
+            ranks = torch.empty_like(ranked)
+            positions = torch.arange(
+                scores.shape[0], device=scores.device, dtype=torch.long
+            ).expand_as(ranked)
+            ranks.scatter_(1, ranked, positions)
+            chosen = candidates & ranks.transpose(0, 1).lt(quotas.unsqueeze(0))
+            learned[..., 0] |= chosen
+            raw[..., 0] |= chosen
 
         valid_per_step = packet.valid_mask.to(torch.long).sum(dim=0)
         capacity = valid_per_step.unsqueeze(-1).expand(-1, len(_EXPERT_IDS)).clone()

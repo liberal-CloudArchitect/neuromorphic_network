@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from neuromorphic.training.p5_config import load_p5_mechanism_config
 from neuromorphic.training.p5_mechanism import _formal_evidence, execute_p5_mechanism
 from neuromorphic.training.p5_suite import verify_p5_run
@@ -37,8 +39,12 @@ def test_p5_formal_gate_fixture_covers_bootstrap_families(tmp_path: Path) -> Non
             "dense-memory",
         ):
             full = variant == "full"
+            aulc = 0.80 if full else 0.70
             summaries[f"{variant}__s{seed}"] = {
-                "macro_aulc": 0.80 if full else 0.70,
+                "analysis_macro_aulc": aulc,
+                "analysis_curve": [[0, aulc], [15000, aulc]],
+                "analysis_budget_steps": 15000,
+                "selected_checkpoint": "best.pt",
                 "drs_score": 0.80 if full else 0.70,
                 "test_scores": {
                     "associative_recall.v1": 0.90 if full else 0.89,
@@ -59,7 +65,9 @@ def test_p5_formal_gate_fixture_covers_bootstrap_families(tmp_path: Path) -> Non
                     "semantic_required": 10.0,
                     "semantic_executed": 10.0,
                     "dual_tokens": 2.0,
+                    "dual_eligible_tokens": 10.0,
                     "valid_tokens": 10.0,
+                    "capacity_drops": 0.0,
                 },
             }
         for variant, value in (("full", 0.90), ("dense-memory", 0.89)):
@@ -92,3 +100,49 @@ def test_p5_formal_gate_fixture_covers_bootstrap_families(tmp_path: Path) -> Non
 
     assert evidence["status"] == "PASSED"
     assert evidence["mac_reduction"] == 0.5
+    assert evidence["dual_fraction"] == 0.2
+    assert evidence["capacity_drops"] == 0.0
+
+    routing = summaries["full__s17"]["routing"]
+    assert isinstance(routing, dict)
+    routing["capacity_drops"] = 1.0
+    failed = _formal_evidence(config, tmp_path, summaries)
+    assert failed["status"] == "FAILED"
+    assert failed["capacity_drops"] == 1.0
+
+    routing["capacity_drops"] = 0.0
+    summaries["full__s17"]["analysis_curve"] = [[0, 1.2], [15000, 1.2]]
+    summaries["full__s17"]["analysis_macro_aulc"] = 1.2
+    with pytest.raises(ValueError, match=r"\[0, 1\]"):
+        _formal_evidence(config, tmp_path, summaries)
+
+
+def test_p5_formal_gate_rejects_unverifiable_aulc(tmp_path: Path) -> None:
+    config = load_p5_mechanism_config(
+        Path("configs/experiments/p5/mechanism-cuda.yaml")
+    ).model_copy(update={"bootstrap_samples": 200})
+    summaries: dict[str, dict[str, object]] = {}
+    for seed in config.seeds:
+        for variant in (
+            "full",
+            "predictor-off",
+            "surprise-off",
+            "no-dual-route",
+            "dense-memory",
+        ):
+            summaries[f"{variant}__s{seed}"] = {
+                "analysis_macro_aulc": 0.8,
+                "analysis_budget_steps": 15000,
+                "selected_checkpoint": "best.pt",
+                "drs_score": 0.8,
+                "test_scores": {
+                    "associative_recall.v1": 0.9,
+                    "delayed_rule_switch.v1": 0.9,
+                    "small_graph.v1": 0.9,
+                },
+                "prediction": {},
+                "routing": {},
+            }
+
+    with pytest.raises(ValueError, match="analysis_curve"):
+        _formal_evidence(config, tmp_path, summaries)

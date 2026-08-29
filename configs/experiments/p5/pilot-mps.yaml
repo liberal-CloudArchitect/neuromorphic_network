@@ -1,5 +1,5 @@
 schema_version: p5-pilot-v1
-protocol_version: p5-protocol-v1
+protocol_version: p5-protocol-v2
 device: mps
 seed: 7
 train_samples: 8192

@@ -1,11 +1,13 @@
 ---
 status: ACCEPTED
-protocol: p5-protocol-v1
-date: 2026-08-24
+protocol: p5-protocol-v2
+date: 2026-08-29
 scope: mechanism-qualification
 ---
 
 # P5：预测 surprise 与稳定语义路由实施规格
+
+`CR-012` 在任何正式 mechanism 结果产生前修正了 AULC、checkpoint 与诊断损失语义。历史 v1 锁不得用于本协议；科学阈值不变。
 
 ## 假说
 
@@ -50,3 +52,13 @@ Pilot 四候选与选择规则已冻结，但尚未在 clean SHA 上运行。Pil
 - seeds `[17,29,43]`、10,000 bootstrap、RNG `20260715`、95% CI 与 Holm p≤0.05。
 
 正式 mechanism 仅在同 SHA CPU micro、CUDA mechanism qualification、CI、qualification lock 和 pilot lock 全部通过后启动。当前仍不能把 qualification 或 pilot 当成科学收益证据。
+
+## P5 protocol-v2 科研有效性约束
+
+- validation 只用于 early stop 与选择 `best.pt`；analysis 只形成 `(step, macro score)` 学习曲线，不参与选择。
+- `analysis_macro_aulc` 使用共享 `normalized_aulc` 在固定最大训练预算上积分，不允许以曲线算术平均替代。
+- retrained cell 的正式 summary 必须登记 analysis curve、固定预算与 `selected_checkpoint=best.pt`；Gate 在 bootstrap 前独立复算并逐项拒绝不一致证据。
+- dual-route fraction 的分母只包含 DRS eligible tokens；capacity drops 必须作为正式证据进入 Gate 并精确为 `0`。
+- frozen-checkpoint 控制从同 seed full `best.pt` 加载，不能从最后 checkpoint 加载。
+- checkpoint schema 为 `p5-checkpoint-v6`，额外持久化 analysis curve。
+- `episodic.separation` 与 `router.communication_cost` 在 P5 optimizer 中权重为 `0`，只作诊断；不得把无忠实梯度的标量称为优化收益。

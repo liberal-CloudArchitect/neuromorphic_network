@@ -21,12 +21,18 @@ def test_p5_qualification_config_is_frozen_and_hashable() -> None:
     assert config.seed == 7
     assert config.steps_per_task == 4
     assert config.dual_route_fraction == 0.25
+    assert config.protocol_version == "p5-protocol-v2"
     assert len(config.config_hash()) == 64
 
 
 def test_p5_qualification_rejects_post_result_threshold_changes() -> None:
     with pytest.raises(ValueError, match="dual-route fraction"):
         P5QualificationConfig(dual_route_fraction=0.2)
+
+
+def test_p5_configs_reject_retired_protocol_v1() -> None:
+    with pytest.raises(ValueError, match="p5-protocol-v2"):
+        P5QualificationConfig(protocol_version="p5-protocol-v1")  # type: ignore[arg-type]
 
 
 def test_p5_pilot_is_validation_only_and_device_scoped() -> None:

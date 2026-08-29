@@ -1,7 +1,7 @@
 ---
 title: 项目实施追踪台账
 status: ACTIVE
-last_updated: 2026-08-24
+last_updated: 2026-08-29
 ---
 
 # 项目实施追踪台账
@@ -107,6 +107,7 @@ last_updated: 2026-08-24
 | P5-04 | 实现 `ModularBrainNetworkV3` 与 P1–P4 兼容注册 | DONE | 三任务 forward/backward 与 v2 回归 |
 | P5-05 | 建立 P5 task namespace 与独立 split seeds | DONE | P4/P5 内容哈希隔离测试 |
 | P5-06 | CPU/MPS/CUDA qualification | IN_PROGRESS | dirty-SHA CPU qualification 已通过；待 clean SHA MPS/CUDA 与远程 CI |
-| P5-07 | checkpoint-v5、telemetry-v3 与后台控制 | DONE | `CR-010`；原子恢复、schema、on/off 等价、status/resume/verify 定向测试 |
+| P5-07 | checkpoint-v6、telemetry-v3 与后台控制 | DONE | `CR-010`/`CR-012`；原子恢复、analysis curve、schema、on/off 等价、status/resume/verify 定向测试 |
 | P5-08 | 冻结 validation-only pilot | DONE | 四候选、eligibility、AULC 排序与设备锁已冻结；正式 mechanism 仍未冻结 |
 | P5-09 | P5 pilot、三 seed mechanism 与独立 Gate | IN_PROGRESS | pilot PASSED（preset-1）；`CR-011` 冻结 24-cell Gate，待 CPU/CUDA mechanism qualification 与正式运行 |
+| P5-10 | 科研有效性修正与 protocol-v2 重建 | IN_PROGRESS | `CR-012`；fixed-budget analysis AULC、best checkpoint、可复算 summary、诊断损失诚实化与路由向量化已实现，待 clean SHA 全链重建 |
