@@ -1,0 +1,154 @@
+# Reviewed public fly datasets (CR-013). Download only after explicit approval.
+schema_version: fly-datasets-v1
+status: PENDING_APPROVAL
+source: docs/fly/dataset_inventory.md
+root: data/fly
+files:
+- dataset: shiu2024
+  version: 91bdd1e
+  file_name: 2023_03_23_completeness_630_final.csv
+  url: https://raw.githubusercontent.com/philshiu/Drosophila_brain_model/91bdd1e7dcf193f3e7ca5a8933497fcef63b7960/2023_03_23_completeness_630_final.csv
+  size_bytes: 3057611
+  checksum_algorithm: md5
+  checksum: 0dc6b58650bd3cd3a2661773d9228e78
+  license: MIT
+  sets:
+  - T0-paper
+  - T0-full
+- dataset: shiu2024
+  version: 91bdd1e
+  file_name: 2023_03_23_connectivity_630_final.parquet
+  url: https://raw.githubusercontent.com/philshiu/Drosophila_brain_model/91bdd1e7dcf193f3e7ca5a8933497fcef63b7960/2023_03_23_connectivity_630_final.parquet
+  size_bytes: 86630944
+  checksum_algorithm: md5
+  checksum: 3b42c0fc2cc525bd9784e38c05f9d79d
+  license: MIT
+  sets:
+  - T0-paper
+  - T0-full
+- dataset: shiu2024
+  version: 91bdd1e
+  file_name: Completeness_783.csv
+  url: https://raw.githubusercontent.com/philshiu/Drosophila_brain_model/91bdd1e7dcf193f3e7ca5a8933497fcef63b7960/Completeness_783.csv
+  size_bytes: 3327347
+  checksum_algorithm: git-blob-sha1
+  checksum: b5a26b82b69a3c2e7fd99cd6810c36fc8f0e492b
+  license: MIT
+  sets:
+  - T0-min
+  - T0-paper
+  - T0-full
+- dataset: shiu2024
+  version: 91bdd1e
+  file_name: Connectivity_783.parquet
+  url: https://raw.githubusercontent.com/philshiu/Drosophila_brain_model/91bdd1e7dcf193f3e7ca5a8933497fcef63b7960/Connectivity_783.parquet
+  size_bytes: 100804642
+  checksum_algorithm: git-blob-sha1
+  checksum: d386555d1a5f40ebfa1380bcb05b1fab044855fd
+  license: MIT
+  sets:
+  - T0-min
+  - T0-paper
+  - T0-full
+- dataset: shiu2024
+  version: 91bdd1e
+  file_name: sugarR.parquet
+  url: https://raw.githubusercontent.com/philshiu/Drosophila_brain_model/91bdd1e7dcf193f3e7ca5a8933497fcef63b7960/results/example/sugarR.parquet
+  size_bytes: 948526
+  checksum_algorithm: git-blob-sha1
+  checksum: 1204cb3ed453ad03b0141028fa511d924f99d599
+  license: MIT
+  sets:
+  - T0-paper
+  - T0-full
+- dataset: shiu2024
+  version: 91bdd1e
+  file_name: sugarR_100Hz.parquet
+  url: https://raw.githubusercontent.com/philshiu/Drosophila_brain_model/91bdd1e7dcf193f3e7ca5a8933497fcef63b7960/results/example/sugarR_100Hz.parquet
+  size_bytes: 557849
+  checksum_algorithm: git-blob-sha1
+  checksum: bd76730d5e991d64b756f354a749f94ffb874c64
+  license: MIT
+  sets:
+  - T0-paper
+  - T0-full
+- dataset: flywire_zenodo
+  version: '783'
+  file_name: proofread_connections_783.feather
+  url: https://zenodo.org/records/10676866/files/proofread_connections_783.feather?download=1
+  size_bytes: 852022274
+  checksum_algorithm: md5
+  checksum: f48f972d262323a102aed49af1396b8a
+  license: CC-BY-4.0
+  sets:
+  - T0-full
+- dataset: flywire_zenodo
+  version: '783'
+  file_name: proofread_root_ids_783.npy
+  url: https://zenodo.org/records/10676866/files/proofread_root_ids_783.npy?download=1
+  size_bytes: 1114168
+  checksum_algorithm: md5
+  checksum: e0e6c19732fd8c7a4e39a2d170105421
+  license: CC-BY-4.0
+  sets:
+  - T0-full
+- dataset: flywire_annotations
+  version: v3.2.0
+  file_name: flywire_annotations-v3.2.0.zip
+  url: https://zenodo.org/records/23037340/files/flyconnectome/flywire_annotations-v3.2.0.zip?download=1
+  size_bytes: 12153637
+  checksum_algorithm: md5
+  checksum: 4bdf63184d35177e56f88de7b3d400ae
+  license: CC-BY-4.0
+  sets:
+  - T0-full
+- dataset: flywire_codex
+  version: '783'
+  file_name: classification.csv.gz
+  url: https://storage.googleapis.com/flywire-data/codex/data/fafb/783/classification.csv.gz
+  size_bytes: 934402
+  checksum_algorithm: md5
+  checksum: 701c0faf054ceddb460bea4e87d6a624
+  license: CC-BY-4.0
+  sets:
+  - T0-full
+- dataset: flywire_codex
+  version: '783'
+  file_name: consolidated_cell_types.csv.gz
+  url: https://storage.googleapis.com/flywire-data/codex/data/fafb/783/consolidated_cell_types.csv.gz
+  size_bytes: 901707
+  checksum_algorithm: md5
+  checksum: 18cc628156bede3129c0e19d14cf52d6
+  license: CC-BY-4.0
+  sets:
+  - T0-full
+- dataset: flywire_codex
+  version: '783'
+  file_name: neurons.csv.gz
+  url: https://storage.googleapis.com/flywire-data/codex/data/fafb/783/neurons.csv.gz
+  size_bytes: 1679884
+  checksum_algorithm: md5
+  checksum: f60333e9e4124160b9b203b1712a6f91
+  license: CC-BY-4.0
+  sets:
+  - T0-full
+- dataset: hemibrain
+  version: v1.2
+  file_name: exported-traced-adjacencies-v1.2.tar.gz
+  url: https://storage.googleapis.com/hemibrain/v1.2/exported-traced-adjacencies-v1.2.tar.gz
+  size_bytes: 45872577
+  checksum_algorithm: md5
+  checksum: ec1e076d15442f368fa5978b00f4a61c
+  license: CC-BY-4.0
+  sets:
+  - T1
+- dataset: hemibrain
+  version: v1.2
+  file_name: hemibrain-v1.2-body-mean-neurotransmitters.feather
+  url: https://storage.googleapis.com/hemibrain/v1.2/hemibrain-v1.2-body-mean-neurotransmitters.feather
+  size_bytes: 45591786
+  checksum_algorithm: md5
+  checksum: ef5d5d511d19ed9bca5d8dc5c8cca690
+  license: CC-BY-4.0
+  sets:
+  - T1

@@ -1,7 +1,7 @@
 ---
 title: 项目实施追踪台账
 status: ACTIVE
-last_updated: 2026-08-29
+last_updated: 2026-10-04
 ---
 
 # 项目实施追踪台账
@@ -18,6 +18,7 @@ last_updated: 2026-08-29
 | P3 因果、泛化与网络 MVP | DONE | GATE-3 PASSED / GATE-NN-MVP FAILED | 科研矩阵完整；当前网络未取得 MVP 资格 |
 | P4 预测闭环与语义稀疏路由 | DONE | GATE-4-MECH-CUDA FAILED | 24-cell CUDA mechanism 完整执行；预测因果与稀疏最坏 seed 非劣性被否证，禁止进入 full |
 | P5 预测 surprise 与稳定语义路由 | IN_PROGRESS | qualification pending | v3 模块与 CPU qualification 已落盘，待 clean SHA MPS/CUDA/CI 闭环 |
+| F 果蝇连接组探索支线 | IN_PROGRESS | 无（exploratory） | `CR-013` 提议；F0 管线与 Shiu 2024 复现完成（`docs/fly/F0-report.md`），待开始 F1；结果不计入任何 Gate |
 
 ## P2 工作项
 
@@ -111,3 +112,14 @@ last_updated: 2026-08-29
 | P5-08 | 冻结 validation-only pilot | DONE | 四候选、eligibility、AULC 排序与设备锁已冻结；正式 mechanism 仍未冻结 |
 | P5-09 | P5 pilot、三 seed mechanism 与独立 Gate | IN_PROGRESS | pilot PASSED（preset-1）；`CR-011` 冻结 24-cell Gate，待 CPU/CUDA mechanism qualification 与正式运行 |
 | P5-10 | 科研有效性修正与 protocol-v2 重建 | IN_PROGRESS | `CR-012`；fixed-budget analysis AULC、best checkpoint、可复算 summary、诊断损失诚实化与路由向量化已实现，待 clean SHA 全链重建 |
+
+## F 支线工作项（exploratory，CR-013）
+
+| ID | 工作项 | 状态 | 当前证据 |
+|---|---|---|---|
+| F0-01 | 开源果蝇数据集盘点：文件、大小、checksum、许可与访问方式 | DONE | `docs/fly/dataset_inventory.md`、`configs/fly/datasets.yaml` |
+| F0-02 | 带 checksum 的显式获取与 signed-count 连接组容器 | DONE | `neuromorphic.fly`、`tests/unit/test_fly_*.py` |
+| F0-03 | 用户批准并获取 T0-full 与 T1 数据集 | DONE | 14 个文件、1.16 GB，全部通过 size/checksum 校验 |
+| F0-04 | 加载 FlyWire 并核对发布统计 | DONE | 官方 783 表聚合后与 Shiu v783 逐项一致；v630 为 127,400 个神经元 |
+| F0-05 | PyTorch 全脑 LIF 与 Shiu 2024 定性复现 | DONE | 糖 GRN → MN9：逐神经元 rate r=0.9998；200 Hz 下 MN9 94.2 vs 93.3 Hz |
+| F0-06 | CPU 确定性与 CPU/MPS 容差 | DONE | CPU 逐位一致；200 Hz 下 MPS 与 CPU 的 MN9 相差 0.3 Hz |
