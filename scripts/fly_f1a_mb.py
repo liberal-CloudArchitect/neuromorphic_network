@@ -184,7 +184,17 @@ Contrast = tuple[str, str, float, str]
 def contrasts(
     per_seed: dict[int, dict[str, dict[str, object]]],
     specification: dict[str, Contrast] = CONTRASTS,
+    *,
+    holm_kinds: tuple[str, ...] = ("superiority", "equivalence"),
 ) -> dict[str, dict[str, object]]:
+    """Paired seed-bootstrap contrasts.
+
+    ``kind`` is ``superiority`` (mean >= threshold, CI low > 0, Holm p <= 0.05),
+    ``equivalence`` (CI within +-threshold) or ``noninferiority`` (CI low >
+    -threshold).  Only kinds in ``holm_kinds`` enter the Holm family; others
+    keep ``p_holm = None``.
+    """
+
     rng = np.random.default_rng(BOOTSTRAP_SEED)
     seeds = sorted(per_seed)
     draws = rng.integers(0, len(seeds), (BOOTSTRAP, len(seeds)))
@@ -209,7 +219,10 @@ def contrasts(
             "ci95": [float(low), float(high)],
             "p": p,
         }
-    order = sorted(rows, key=lambda c: float(rows[c]["p"]))  # type: ignore[arg-type]
+    family = [c for c in rows if rows[c]["kind"] in holm_kinds]
+    for cid in rows:
+        rows[cid]["p_holm"] = None
+    order = sorted(family, key=lambda c: float(rows[c]["p"]))  # type: ignore[arg-type]
     running = 0.0
     for rank, cid in enumerate(order):
         running = max(running, min(1.0, (len(order) - rank) * float(rows[cid]["p"])))  # type: ignore[arg-type]
@@ -219,6 +232,9 @@ def contrasts(
         if row["kind"] == "equivalence":
             passed = -row["threshold"] < low and high < row["threshold"]  # type: ignore[operator]
             row["verdict"] = "EQUIVALENT" if passed else "UNDETERMINED"
+        elif row["kind"] == "noninferiority":
+            passed = low > -row["threshold"]  # type: ignore[operator]
+            row["verdict"] = "NON_INFERIOR" if passed else "NOT_NON_INFERIOR"
         else:
             passed = (
                 row["mean"] >= row["threshold"]  # type: ignore[operator]

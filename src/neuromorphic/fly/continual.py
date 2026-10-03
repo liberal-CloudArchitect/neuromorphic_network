@@ -36,14 +36,14 @@ class OdorTask:
     test_mode: Tensor | None = None
 
 
-def _draw_prototypes(
+def draw_prototypes(
     rng: np.random.Generator, count: int, n_glomeruli: int, active_probability: float
 ) -> FloatArray:
     active = rng.random((count, n_glomeruli)) < active_probability
     return np.where(active, rng.lognormal(0.0, 0.5, (count, n_glomeruli)), 0.0)
 
 
-def _draw_samples(
+def draw_samples(
     prototypes: FloatArray,
     source: IntArray,
     *,
@@ -84,17 +84,17 @@ def make_odor_task(
 
     if n_classes <= 0 or n_train <= 0 or n_test <= 0 or sigma < 0:
         raise ValueError("invalid odor task size or noise")
-    prototypes = _draw_prototypes(rng, n_classes, n_glomeruli, active_probability)
+    prototypes = draw_prototypes(rng, n_classes, n_glomeruli, active_probability)
     if families:
         if not 0.0 <= family_mixing < 1.0:
             raise ValueError("family_mixing must be in [0, 1)")
-        family = _draw_prototypes(rng, families, n_glomeruli, active_probability)
+        family = draw_prototypes(rng, families, n_glomeruli, active_probability)
         shared = family[np.arange(n_classes) % families]
         prototypes = (1.0 - family_mixing) * prototypes + family_mixing * shared
 
     def draw(per_class: int) -> tuple[Tensor, Tensor]:
         labels = np.repeat(np.arange(n_classes), per_class)
-        samples = _draw_samples(
+        samples = draw_samples(
             prototypes,
             labels,
             sigma=sigma,
@@ -130,11 +130,11 @@ def make_multimodal_task(
 
     if min(n_classes, modes, n_train_per_mode, n_test_per_mode) <= 0 or sigma < 0:
         raise ValueError("invalid multi-modal task size or noise")
-    prototypes = _draw_prototypes(rng, n_classes * modes, n_glomeruli, active_probability)
+    prototypes = draw_prototypes(rng, n_classes * modes, n_glomeruli, active_probability)
 
     def draw(per_mode: int) -> tuple[Tensor, Tensor, Tensor]:
         source = np.repeat(np.arange(n_classes * modes), per_mode)
-        samples = _draw_samples(
+        samples = draw_samples(
             prototypes,
             source,
             sigma=sigma,
