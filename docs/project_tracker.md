@@ -18,7 +18,7 @@ last_updated: 2026-10-04
 | P3 因果、泛化与网络 MVP | DONE | GATE-3 PASSED / GATE-NN-MVP FAILED | 科研矩阵完整；当前网络未取得 MVP 资格 |
 | P4 预测闭环与语义稀疏路由 | DONE | GATE-4-MECH-CUDA FAILED | 24-cell CUDA mechanism 完整执行；预测因果与稀疏最坏 seed 非劣性被否证，禁止进入 full |
 | P5 预测 surprise 与稳定语义路由 | IN_PROGRESS | qualification pending | v3 模块与 CPU qualification 已落盘，待 clean SHA MPS/CUDA/CI 闭环 |
-| F 果蝇连接组探索支线 | IN_PROGRESS | 无（exploratory） | `CR-013` 提议；F0 完成；F1a 系列（v1–v4）完成（`docs/fly/F1a-report.md`）：局部关联规则防遗忘获支持；稀疏码仅在低噪声多峰类别下优于原型学习（确认实验通过）；真实接线无拓扑优势；F1b 预测误差门控可塑性获支持；结果不计入任何 Gate |
+| F 果蝇连接组探索支线 | IN_PROGRESS | 无（exploratory） | `CR-013` 提议；F0 完成；F1a 系列（v1–v4）完成（`docs/fly/F1a-report.md`）：局部关联规则防遗忘获支持；稀疏码仅在低噪声多峰类别下优于原型学习（确认实验通过）；真实接线无拓扑优势；F1b 预测误差门控可塑性获支持；F1c 环结构仅存在于真实接线但均匀参数下无吸引子；结果不计入任何 Gate |
 
 ## P2 工作项
 
@@ -131,5 +131,6 @@ last_updated: 2026-10-04
 | F1a-06 | F1a-v3：多峰类别（预注册，seeds 20–29） | DONE | E3/E4 支持，E1/E2 不支持；事后发现噪声区依赖 |
 | F1a-07 | F1a-v4：低噪声确认实验（预注册，seeds 30–39） | DONE | G1 +16.6pp、G2 +17.3pp、G3 +2.8pp 均支持；G4 不等价 |
 | F1b | 多巴胺门控 surprise 学习（预注册，seeds 40–49） | DONE | H1 预测误差门控 +20.5pp 支持；H2 全局 surprise 不支持；H3 非劣；H4 不支持（`docs/fly/F1b-report.md`） |
-| F1c | 中央复合体环形吸引子 | NOT_STARTED | — |
+| F1c | 中央复合体环形吸引子（预注册，seeds 50–59） | DONE | 结构：仅真实接线呈环（谱间隙）；动力学：均匀参数速率模型 J1–J3 全部不支持（`docs/fly/F1c-report.md`） |
+| F1c-v2 | 训练细胞类型参数的环形吸引子 | NOT_STARTED | — |
 | F1d | 真实气味统计（DoOR） | NOT_STARTED | 需批准下载 |
