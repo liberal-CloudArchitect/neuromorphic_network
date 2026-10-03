@@ -56,7 +56,6 @@ conda run -n brain make check
 - `docs/`：P0～P4 研究、架构、变更请求和治理文档。
 - `schemas/`：冻结的 telemetry 与运行产物 schema。
 - `tests/`：单元、集成与端到端 smoke。
-- `.omx/plans/`：可行性研究与实施追踪台账。
 - `visualization/`：后续可选展示层；网络包不得依赖它。
 
 ## 开发命令
