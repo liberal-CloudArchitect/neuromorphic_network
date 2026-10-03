@@ -7,8 +7,10 @@ import torch
 from neuromorphic.fly.continual import (
     AssociativeReadout,
     NearestClassMean,
+    NearestNeighbor,
     PerceptronReadout,
     kc_code,
+    make_multimodal_task,
     make_odor_task,
     run_class_incremental,
 )
@@ -147,3 +149,29 @@ def test_class_incremental_runner_tracks_forgetting() -> None:
     assert result.accuracy[1, 1] > 0
     assert result.final_accuracy == pytest.approx(result.accuracy[1].mean())
     assert result.forgetting == pytest.approx(result.accuracy[0, 0] - result.accuracy[1, 0])
+
+
+def test_multimodal_task_labels_modes_and_classes() -> None:
+    task = make_multimodal_task(
+        np.arange(6) // 2,
+        n_glomeruli=3,
+        n_classes=2,
+        modes=3,
+        n_train_per_mode=4,
+        n_test_per_mode=2,
+        sigma=0.1,
+        rng=np.random.default_rng(0),
+    )
+    assert task.train_mode is not None and task.test_mode is not None
+    assert task.train_x.shape == (24, 6)
+    assert torch.equal(task.train_y, task.train_mode // 3)
+    assert task.test_y.bincount().tolist() == [6, 6]
+
+
+def test_nearest_neighbor_restricts_to_seen_classes() -> None:
+    learner = NearestNeighbor()
+    learner.fit_task(torch.tensor([[1.0, 0.0], [0.0, 1.0]]), torch.tensor([0, 1]))
+    learner.fit_task(torch.tensor([[1.0, 0.1]]), torch.tensor([2]))
+    query = torch.tensor([[1.0, 0.1]])
+    assert learner.predict(query, seen=3).item() == 2
+    assert learner.predict(query, seen=2).item() == 0

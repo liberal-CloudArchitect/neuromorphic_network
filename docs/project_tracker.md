@@ -18,7 +18,7 @@ last_updated: 2026-10-04
 | P3 因果、泛化与网络 MVP | DONE | GATE-3 PASSED / GATE-NN-MVP FAILED | 科研矩阵完整；当前网络未取得 MVP 资格 |
 | P4 预测闭环与语义稀疏路由 | DONE | GATE-4-MECH-CUDA FAILED | 24-cell CUDA mechanism 完整执行；预测因果与稀疏最坏 seed 非劣性被否证，禁止进入 full |
 | P5 预测 surprise 与稳定语义路由 | IN_PROGRESS | qualification pending | v3 模块与 CPU qualification 已落盘，待 clean SHA MPS/CUDA/CI 闭环 |
-| F 果蝇连接组探索支线 | IN_PROGRESS | 无（exploratory） | `CR-013` 提议；F0 完成；F1a/F1a-v2 蘑菇体持续学习完成（`docs/fly/F1a-report.md`）：局部关联规则防遗忘获支持，稀疏码与归一化假说被否证；结果不计入任何 Gate |
+| F 果蝇连接组探索支线 | IN_PROGRESS | 无（exploratory） | `CR-013` 提议；F0 完成；F1a 系列（v1–v4）完成（`docs/fly/F1a-report.md`）：局部关联规则防遗忘获支持；稀疏码仅在低噪声多峰类别下优于原型学习（确认实验通过）；真实接线无拓扑优势；结果不计入任何 Gate |
 
 ## P2 工作项
 
@@ -128,3 +128,8 @@ last_updated: 2026-10-04
 | F1a-03 | 10 seed 运行与预注册比较 | DONE | C1 支持；C2–C5 不支持或未确定；见 `docs/fly/F1a-report.md` |
 | F1a-04 | 事后敏感性分析（描述性） | DONE | 稀疏 5% 在 9 种设置下均劣于 50% 与 NCM |
 | F1a-05 | F1a-v2：KC 稳态归一化（预注册，seeds 10–19） | DONE | D1–D5 均不支持；码塌缩假说被否证 |
+| F1a-06 | F1a-v3：多峰类别（预注册，seeds 20–29） | DONE | E3/E4 支持，E1/E2 不支持；事后发现噪声区依赖 |
+| F1a-07 | F1a-v4：低噪声确认实验（预注册，seeds 30–39） | DONE | G1 +16.6pp、G2 +17.3pp、G3 +2.8pp 均支持；G4 不等价 |
+| F1b | 多巴胺门控 surprise 学习 | NOT_STARTED | — |
+| F1c | 中央复合体环形吸引子 | NOT_STARTED | — |
+| F1d | 真实气味统计（DoOR） | NOT_STARTED | 需批准下载 |

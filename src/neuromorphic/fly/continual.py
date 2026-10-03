@@ -21,13 +21,43 @@ IntArray = NDArray[np.int64]
 
 @dataclass(frozen=True, slots=True)
 class OdorTask:
-    """Synthetic glomerular odors expanded to per-PN activity."""
+    """Synthetic glomerular odors expanded to per-PN activity.
+
+    ``train_mode``/``test_mode`` identify the source prototype of each sample
+    when a class is the union of several odors (multi-modal tasks).
+    """
 
     train_x: Tensor
     train_y: Tensor
     test_x: Tensor
     test_y: Tensor
     n_classes: int
+    train_mode: Tensor | None = None
+    test_mode: Tensor | None = None
+
+
+def _draw_prototypes(
+    rng: np.random.Generator, count: int, n_glomeruli: int, active_probability: float
+) -> FloatArray:
+    active = rng.random((count, n_glomeruli)) < active_probability
+    return np.where(active, rng.lognormal(0.0, 0.5, (count, n_glomeruli)), 0.0)
+
+
+def _draw_samples(
+    prototypes: FloatArray,
+    source: IntArray,
+    *,
+    sigma: float,
+    pn_glomerulus_index: IntArray,
+    pn_noise: float,
+    rng: np.random.Generator,
+) -> Tensor:
+    base = prototypes[source]
+    glomeruli = base * (1.0 + sigma * rng.standard_normal(base.shape))
+    glomeruli = np.maximum(glomeruli + 0.5 * sigma * rng.standard_normal(base.shape), 0.0)
+    pn = glomeruli[:, pn_glomerulus_index]
+    pn = np.maximum(pn + pn_noise * rng.standard_normal(pn.shape), 0.0)
+    return torch.as_tensor(pn, dtype=torch.float32)
 
 
 def make_odor_task(
@@ -54,28 +84,69 @@ def make_odor_task(
 
     if n_classes <= 0 or n_train <= 0 or n_test <= 0 or sigma < 0:
         raise ValueError("invalid odor task size or noise")
-    active = rng.random((n_classes, n_glomeruli)) < active_probability
-    prototypes = np.where(active, rng.lognormal(0.0, 0.5, (n_classes, n_glomeruli)), 0.0)
+    prototypes = _draw_prototypes(rng, n_classes, n_glomeruli, active_probability)
     if families:
         if not 0.0 <= family_mixing < 1.0:
             raise ValueError("family_mixing must be in [0, 1)")
-        family_active = rng.random((families, n_glomeruli)) < active_probability
-        family = np.where(family_active, rng.lognormal(0.0, 0.5, (families, n_glomeruli)), 0.0)
+        family = _draw_prototypes(rng, families, n_glomeruli, active_probability)
         shared = family[np.arange(n_classes) % families]
         prototypes = (1.0 - family_mixing) * prototypes + family_mixing * shared
 
     def draw(per_class: int) -> tuple[Tensor, Tensor]:
         labels = np.repeat(np.arange(n_classes), per_class)
-        base = prototypes[labels]
-        glomeruli = base * (1.0 + sigma * rng.standard_normal(base.shape))
-        glomeruli = np.maximum(glomeruli + 0.5 * sigma * rng.standard_normal(base.shape), 0.0)
-        pn = glomeruli[:, pn_glomerulus_index]
-        pn = np.maximum(pn + pn_noise * rng.standard_normal(pn.shape), 0.0)
-        return torch.as_tensor(pn, dtype=torch.float32), torch.as_tensor(labels)
+        samples = _draw_samples(
+            prototypes,
+            labels,
+            sigma=sigma,
+            pn_glomerulus_index=pn_glomerulus_index,
+            pn_noise=pn_noise,
+            rng=rng,
+        )
+        return samples, torch.as_tensor(labels)
 
     train_x, train_y = draw(n_train)
     test_x, test_y = draw(n_test)
     return OdorTask(train_x, train_y, test_x, test_y, n_classes)
+
+
+def make_multimodal_task(
+    pn_glomerulus_index: IntArray,
+    *,
+    n_glomeruli: int,
+    n_classes: int,
+    modes: int,
+    n_train_per_mode: int,
+    n_test_per_mode: int,
+    sigma: float,
+    rng: np.random.Generator,
+    active_probability: float = 0.3,
+    pn_noise: float = 0.05,
+) -> OdorTask:
+    """Each class is the union of ``modes`` independently drawn odors.
+
+    Prototype ``m`` belongs to class ``m // modes``, so the class mean in PN
+    space blends unrelated odors while each odor stays a tight cluster.
+    """
+
+    if min(n_classes, modes, n_train_per_mode, n_test_per_mode) <= 0 or sigma < 0:
+        raise ValueError("invalid multi-modal task size or noise")
+    prototypes = _draw_prototypes(rng, n_classes * modes, n_glomeruli, active_probability)
+
+    def draw(per_mode: int) -> tuple[Tensor, Tensor, Tensor]:
+        source = np.repeat(np.arange(n_classes * modes), per_mode)
+        samples = _draw_samples(
+            prototypes,
+            source,
+            sigma=sigma,
+            pn_glomerulus_index=pn_glomerulus_index,
+            pn_noise=pn_noise,
+            rng=rng,
+        )
+        return samples, torch.as_tensor(source // modes), torch.as_tensor(source)
+
+    train_x, train_y, train_mode = draw(n_train_per_mode)
+    test_x, test_y, test_mode = draw(n_test_per_mode)
+    return OdorTask(train_x, train_y, test_x, test_y, n_classes, train_mode, test_mode)
 
 
 def kc_code(pn: Tensor, weights: Tensor, *, sparsity: float) -> Tensor:
@@ -152,6 +223,29 @@ class NearestClassMean:
         means = self.total[:seen] / self.count[:seen].clamp(min=1).unsqueeze(1)
         means = nn.functional.normalize(means, dim=1)
         return (nn.functional.normalize(x, dim=1) @ means.T).argmax(dim=1)
+
+
+class NearestNeighbor:
+    """Cosine 1-nearest-neighbour over every stored training sample.
+
+    A non-parametric reference: its memory grows with the number of samples,
+    unlike the fixed-size associative readout.
+    """
+
+    def __init__(self) -> None:
+        self.x: list[Tensor] = []
+        self.y: list[Tensor] = []
+
+    def fit_task(self, x: Tensor, y: Tensor) -> None:
+        self.x.append(nn.functional.normalize(x, dim=1))
+        self.y.append(y)
+
+    def predict(self, x: Tensor, seen: int) -> Tensor:
+        stored = torch.cat(self.x)
+        labels = torch.cat(self.y)
+        keep = labels < seen
+        similarity = nn.functional.normalize(x, dim=1) @ stored[keep].T
+        return labels[keep][similarity.argmax(dim=1)]
 
 
 class GradientLearner:
