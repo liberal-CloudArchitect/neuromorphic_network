@@ -18,7 +18,7 @@ last_updated: 2026-10-04
 | P3 因果、泛化与网络 MVP | DONE | GATE-3 PASSED / GATE-NN-MVP FAILED | 科研矩阵完整；当前网络未取得 MVP 资格 |
 | P4 预测闭环与语义稀疏路由 | DONE | GATE-4-MECH-CUDA FAILED | 24-cell CUDA mechanism 完整执行；预测因果与稀疏最坏 seed 非劣性被否证，禁止进入 full |
 | P5 预测 surprise 与稳定语义路由 | IN_PROGRESS | qualification pending | v3 模块与 CPU qualification 已落盘，待 clean SHA MPS/CUDA/CI 闭环 |
-| F 果蝇连接组探索支线 | IN_PROGRESS | 无（exploratory） | `CR-013` 提议；F0 管线与 Shiu 2024 复现完成（`docs/fly/F0-report.md`），待开始 F1；结果不计入任何 Gate |
+| F 果蝇连接组探索支线 | IN_PROGRESS | 无（exploratory） | `CR-013` 提议；F0 完成；F1a/F1a-v2 蘑菇体持续学习完成（`docs/fly/F1a-report.md`）：局部关联规则防遗忘获支持，稀疏码与归一化假说被否证；结果不计入任何 Gate |
 
 ## P2 工作项
 
@@ -123,3 +123,8 @@ last_updated: 2026-10-04
 | F0-04 | 加载 FlyWire 并核对发布统计 | DONE | 官方 783 表聚合后与 Shiu v783 逐项一致；v630 为 127,400 个神经元 |
 | F0-05 | PyTorch 全脑 LIF 与 Shiu 2024 定性复现 | DONE | 糖 GRN → MN9：逐神经元 rate r=0.9998；200 Hz 下 MN9 94.2 vs 93.3 Hz |
 | F0-06 | CPU 确定性与 CPU/MPS 容差 | DONE | CPU 逐位一致；200 Hz 下 MPS 与 CPU 的 MN9 相差 0.3 Hz |
+| F1a-01 | 冻结 MB 持续学习协议 | DONE | `docs/fly/F1a-mb-protocol.md` |
+| F1a-02 | 右半球 PN→KC 回路提取与拓扑零模型 | DONE | 122 个 PN、2,423 个 KC、12,887 条边；保度重连与 ER 零模型 |
+| F1a-03 | 10 seed 运行与预注册比较 | DONE | C1 支持；C2–C5 不支持或未确定；见 `docs/fly/F1a-report.md` |
+| F1a-04 | 事后敏感性分析（描述性） | DONE | 稀疏 5% 在 9 种设置下均劣于 50% 与 NCM |
+| F1a-05 | F1a-v2：KC 稳态归一化（预注册，seeds 10–19） | DONE | D1–D5 均不支持；码塌缩假说被否证 |
