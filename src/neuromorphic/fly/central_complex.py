@@ -504,3 +504,37 @@ def antisymmetry_index(none: Tensor, left: Tensor, right: Tensor) -> tuple[float
     energy = 0.5 * float((d_left**2 + d_right**2).sum())
     index = -float((d_left * d_right).sum()) / energy if energy > 0 else 0.0
     return index, float(torch.cat([d_left.abs(), d_right.abs()]).mean())
+
+
+def ideal_rotating_ring(n_ring: int = 48, n_inhibitory: int = 8) -> CXCircuit:
+    """Ring attractor with left/right PENs offset by +-1 (F1f-v2 positive control).
+
+    Indices: EPG ``0..n-1`` (ring order), left PEN ``n..2n-1``, right PEN
+    ``2n..3n-1``, Delta7 after that.  PEN_i receives 6 synapses from EPG_i and
+    sends 6 to EPG_{i+1} (left) or EPG_{i-1} (right).
+    """
+
+    base = ideal_ring_circuit(n_ring, n_inhibitory)
+    shift = 2 * n_ring  # PENs are inserted between EPGs and Delta7
+    pre = [int(p) + (shift if p >= n_ring else 0) for p in base.edge_pre]
+    post = [int(q) + (shift if q >= n_ring else 0) for q in base.edge_post]
+    count = base.edge_count.tolist()
+    for i in range(n_ring):
+        for offset, pen in ((1, n_ring + i), (-1, 2 * n_ring + i)):
+            pre += [i, pen]
+            post += [pen, (i + offset) % n_ring]
+            count += [6.0, 6.0]
+    n = 3 * n_ring + n_inhibitory
+    return CXCircuit(
+        ids=np.arange(n, dtype=np.int64),
+        cell_type=("EPG",) * n_ring + ("PEN_a(PEN1)",) * (2 * n_ring) + ("Delta7",) * n_inhibitory,
+        side=("right",) * n_ring
+        + ("left",) * n_ring
+        + ("right",) * n_ring
+        + ("right",) * n_inhibitory,
+        sign=np.array([1.0] * (3 * n_ring) + [-1.0] * n_inhibitory),
+        edge_pre=np.array(pre, dtype=np.int64),
+        edge_post=np.array(post, dtype=np.int64),
+        edge_count=np.array(count),
+        topology="ideal_rotating_ring",
+    )

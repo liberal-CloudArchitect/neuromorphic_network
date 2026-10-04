@@ -217,3 +217,16 @@ def test_rotation_simulation_shapes() -> None:
     )
     assert out.shape == (3, ring.n)
     assert torch.all(out >= 0)
+
+
+def test_ideal_rotating_ring_offsets() -> None:
+    from neuromorphic.fly.central_complex import ideal_rotating_ring
+
+    ring = ideal_rotating_ring(n_ring=12, n_inhibitory=2)
+    counts = ring.counts()
+    left_pen, right_pen = 12 + 3, 24 + 3
+    assert counts[left_pen, 3] == 6 and counts[4, left_pen] == 6
+    assert counts[right_pen, 3] == 6 and counts[2, right_pen] == 6
+    assert ring.side[left_pen] == "left" and ring.side[right_pen] == "right"
+    assert set(ring.cell_type) == {"EPG", "PEN_a(PEN1)", "Delta7"}
+    assert ring.sign[-1] == -1.0 and ring.sign[0] == 1.0

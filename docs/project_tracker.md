@@ -138,4 +138,5 @@ last_updated: 2026-10-04
 | F1c-v3 | 带资格检查的类型参数环形吸引子 | INVALID | 资格检查失败：阳性对照理想环在 BPTT 下也停在机会水平；正式 seeds 80–89 未使用。诊断：模型类可表达环形吸引子（网格搜索 100%），失败来自 BPTT 优化 |
 | F1c-v4 | 无梯度等预算随机搜索类型参数（预注册，seeds 90–99） | DONE | P1–P3 全部支持：real 0.659，比 type_preserving 高 38pp、比 degree_preserving 高 24pp |
 | F1f | 路径积分：PEN 单侧驱动（预注册，沿用 F1c-v4 参数） | DONE | R1–R3 不支持：只按记忆选出的参数不会自发产生左右相反的转动（`docs/fly/F1f-report.md`） |
+| F1f-v2 | 记忆与转动联合等预算搜索（预注册，seeds 100–109） | DONE | 阳性对照通过（记忆 1.0、A 1.0）；real 找不到联合解，S1–S3 不支持；路径积分在本抽象中未复现 |
 | F1-SUM | F1 阶段总结与主线迁移建议 | DONE | `docs/fly/F1-summary.md` |
