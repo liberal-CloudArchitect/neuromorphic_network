@@ -11,7 +11,7 @@ import math
 from collections import defaultdict
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import torch
@@ -231,6 +231,23 @@ class MemoryProtocol:
     dt_ms: float = 1.0
     cue_amplitude: float = 1.0
     noise_sd: float = 0.05
+    activation: Literal["relu_tanh", "tanh_softplus"] = "relu_tanh"
+
+    def __post_init__(self) -> None:
+        if self.activation not in {"relu_tanh", "tanh_softplus"}:
+            raise ValueError("activation must be 'relu_tanh' or 'tanh_softplus'")
+
+
+def _activate(x: Tensor, activation: str) -> Tensor:
+    """``relu_tanh`` = max(0, tanh x) (F1c); ``tanh_softplus`` = tanh(softplus x).
+
+    The second is smooth and strictly positive, so gradients never vanish on a
+    silent network (the F1c-v2 failure mode).
+    """
+
+    if activation == "relu_tanh":
+        return torch.tanh(x).clamp(min=0.0)
+    return torch.tanh(torch.nn.functional.softplus(x))
 
 
 def simulate_memory(
@@ -252,15 +269,16 @@ def simulate_memory(
     """
 
     batch, neurons = cue_inputs.shape
-    rate = torch.zeros(batch, neurons)
+    device = cue_inputs.device
+    rate = torch.zeros(batch, neurons, device=device)
     step = protocol.dt_ms / protocol.tau_ms
     phases = (
         (protocol.baseline_ms, False),
         (protocol.cue_ms, True),
         (protocol.delay_ms, False),
     )
-    cue_sum = torch.zeros(batch, neurons)
-    late_sum = torch.zeros(batch, neurons)
+    cue_sum = torch.zeros(batch, neurons, device=device)
+    late_sum = torch.zeros(batch, neurons, device=device)
     late_start = protocol.delay_ms - protocol.readout_ms
     g = gain[:, None] if gain.dim() == 1 else gain
     b = bias[:, None] if bias.dim() == 1 else bias
@@ -270,8 +288,10 @@ def simulate_memory(
             drive = g * (rate @ weights.T) + b
             if cued:
                 drive = drive + protocol.cue_amplitude * cue_inputs
-            noise = torch.randn(batch, neurons, generator=generator) * protocol.noise_sd
-            rate = rate + step * (-rate + torch.tanh(drive + noise).clamp(min=0.0))
+            noise = (
+                torch.randn(batch, neurons, generator=generator, device=device) * protocol.noise_sd
+            )
+            rate = rate + step * (-rate + _activate(drive + noise, protocol.activation))
             if cued:
                 cue_sum = cue_sum + rate
             if phase == 2 and t * protocol.dt_ms >= late_start:
@@ -327,12 +347,15 @@ def train_type_parameters(
     trials_per_cue: int = 4,
     clip: float = 1.0,
     protocol: MemoryProtocol | None = None,
+    homeostasis_weight: float = 0.0,
+    homeostasis_target: float = 0.2,
 ) -> tuple[TypeParameters, list[float]]:
     """Fit cell-type gains/biases by BPTT on a cue-memory objective.
 
     The connectome (topology and synapse counts) stays fixed.  An auxiliary
     linear decoder reads the late-delay activity of ``readout`` neurons during
-    training only; evaluation must not use it.
+    training only; evaluation must not use it.  With ``homeostasis_weight > 0``
+    the loss adds ``w * (mean late readout rate - target)^2``.
     """
 
     protocol = protocol or MemoryProtocol()
@@ -358,9 +381,49 @@ def train_type_parameters(
             weights, cues, gain, offset, protocol=protocol, generator=generator
         )
         loss = torch.nn.functional.cross_entropy(decoder(late[:, index]), labels)
+        if homeostasis_weight:
+            loss = loss + homeostasis_weight * (late[:, index].mean() - homeostasis_target) ** 2
         optimizer.zero_grad()
         loss.backward()  # type: ignore[no-untyped-call]
         torch.nn.utils.clip_grad_norm_(parameters, clip)
         optimizer.step()
         history.append(float(loss))
     return TypeParameters(types, log_gain.detach().clone(), bias.detach().clone()), history
+
+
+def ideal_ring_circuit(
+    n_ring: int = 48, n_inhibitory: int = 8, *, near: int = 10, far: int = 4
+) -> CXCircuit:
+    """Textbook ring attractor used as a positive control (F1c-v3).
+
+    Excitatory "EPG" units couple to ring neighbours at distance 1 (``near``
+    synapses) and 2 (``far``); inhibitory "Delta7" units receive 2 synapses from
+    every EPG and return 3 synapses to every EPG.  Ring order equals index order.
+    """
+
+    pre: list[int] = []
+    post: list[int] = []
+    count: list[float] = []
+    for i in range(n_ring):
+        for distance, synapses in ((1, near), (2, far)):
+            for j in ((i + distance) % n_ring, (i - distance) % n_ring):
+                pre.append(i)
+                post.append(j)
+                count.append(float(synapses))
+    for k in range(n_inhibitory):
+        inhibitory = n_ring + k
+        for i in range(n_ring):
+            pre += [i, inhibitory]
+            post += [inhibitory, i]
+            count += [2.0, 3.0]
+    n = n_ring + n_inhibitory
+    return CXCircuit(
+        ids=np.arange(n, dtype=np.int64),
+        cell_type=("EPG",) * n_ring + ("Delta7",) * n_inhibitory,
+        side=("right",) * n,
+        sign=np.array([1.0] * n_ring + [-1.0] * n_inhibitory),
+        edge_pre=np.array(pre, dtype=np.int64),
+        edge_post=np.array(post, dtype=np.int64),
+        edge_count=np.array(count),
+        topology="ideal_ring",
+    )

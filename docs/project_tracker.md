@@ -135,5 +135,6 @@ last_updated: 2026-10-04
 | F1c-v2 | 训练细胞类型参数的环形吸引子（预注册，seeds 60–69） | INVALID | 三张图的训练都退化为全网静默，损失停在机会水平；不构成拓扑证据，需要新协议 |
 | F1d | 真实气味统计（DoOR，预注册，seeds 70–79） | DONE | L1/L2 不支持（采样偏好无判别收益）；L3 real 略优于保度零模型 +0.7pp（`docs/fly/F1d-report.md`） |
 | F1e | MBON→DAN 反馈回路结构检验（预注册） | DONE | O1 互惠反馈富集 7.3× 支持；O2 抑制偏好不显著（`docs/fly/F1e-report.md`） |
-| F1c-v3 | 带资格检查的类型参数环形吸引子 | IN_PROGRESS | 协议已冻结（`d785823`） |
+| F1c-v3 | 带资格检查的类型参数环形吸引子 | INVALID | 资格检查失败：阳性对照理想环在 BPTT 下也停在机会水平；正式 seeds 80–89 未使用。诊断：模型类可表达环形吸引子（网格搜索 100%），失败来自 BPTT 优化 |
+| F1c-v4 | 无梯度等预算随机搜索类型参数 | IN_PROGRESS | 协议已冻结 |
 | F1-SUM | F1 阶段总结与主线迁移建议 | DONE | `docs/fly/F1-summary.md` |

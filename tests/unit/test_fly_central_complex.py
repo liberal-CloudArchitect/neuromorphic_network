@@ -12,6 +12,7 @@ from neuromorphic.fly.central_complex import (
     cue_bins,
     degree_preserving_directed,
     extract_cx,
+    ideal_ring_circuit,
     ring_embedding,
     simulate_memory,
     template_accuracy,
@@ -148,3 +149,32 @@ def test_type_training_keeps_topology_and_reduces_loss() -> None:
     gain, bias = params.per_neuron(ring)
     assert gain.shape == (ring.n,) and bias.shape == (ring.n,)
     assert torch.all(gain > 0)
+
+
+def test_smooth_activation_never_silences_gradients() -> None:
+    protocol = MemoryProtocol(
+        baseline_ms=5, cue_ms=10, delay_ms=40, readout_ms=10, activation="tanh_softplus"
+    )
+    bias = torch.full((2, 3), -20.0, requires_grad=True)
+    late, _ = simulate_memory(
+        torch.zeros(3, 3),
+        torch.zeros(2, 3),
+        torch.ones(2),
+        bias,
+        protocol=protocol,
+        generator=torch.Generator().manual_seed(0),
+    )
+    late.sum().backward()  # type: ignore[no-untyped-call]
+    assert bias.grad is not None and torch.all(bias.grad > 0)
+    with pytest.raises(ValueError, match="activation"):
+        MemoryProtocol(activation="sigmoid")  # type: ignore[arg-type]
+
+
+def test_ideal_ring_is_a_ring() -> None:
+    ring = ideal_ring_circuit()
+    assert ring.n == 56
+    angles, eigenvalues = ring_embedding(ring)
+    order = np.argsort(angles)
+    steps = np.diff(np.concatenate([order, order[:1]])) % 48
+    assert np.all(np.isin(steps, (1, 47)))
+    assert eigenvalues[1] == pytest.approx(eigenvalues[2], rel=1e-6)  # exact ring symmetry
