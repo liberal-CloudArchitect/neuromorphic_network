@@ -187,3 +187,36 @@ def erdos_renyi(circuit: PNKCCircuit, rng: np.random.Generator) -> PNKCCircuit:
         edge_weight=rng.permutation(circuit.edge_weight),
         topology="er",
     )
+
+
+def glomerulus_uniform(circuit: PNKCCircuit, rng: np.random.Generator) -> PNKCCircuit:
+    """Remove glomerular sampling bias while keeping every KC's in-degree.
+
+    Each KC input picks a glomerulus uniformly, then a PN of that glomerulus
+    uniformly; a KC never receives the same PN twice.  Weights are permuted from
+    the real graph.
+    """
+
+    glomeruli = sorted(set(circuit.pn_glomerulus))
+    members = [
+        np.flatnonzero(np.array(circuit.pn_glomerulus) == g).astype(np.int64) for g in glomeruli
+    ]
+    degrees = circuit.kc_in_degree()
+    kc_list: list[int] = []
+    pn_list: list[int] = []
+    for kc, degree in enumerate(degrees.tolist()):
+        if degree > circuit.n_pn:
+            raise ValueError("KC in-degree exceeds the number of PNs")
+        chosen: set[int] = set()
+        while len(chosen) < degree:
+            pool = members[int(rng.integers(len(members)))]
+            chosen.add(int(pool[int(rng.integers(pool.size))]))
+        kc_list.extend([kc] * degree)
+        pn_list.extend(sorted(chosen))
+    return replace(
+        circuit,
+        edge_kc=np.array(kc_list, dtype=np.int64),
+        edge_pn=np.array(pn_list, dtype=np.int64),
+        edge_weight=rng.permutation(circuit.edge_weight),
+        topology="glomerulus_uniform",
+    )

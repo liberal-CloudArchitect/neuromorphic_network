@@ -14,11 +14,13 @@ from neuromorphic.fly.continual import (
     make_odor_task,
     run_class_incremental,
 )
+from neuromorphic.fly.door import load_door_block
 from neuromorphic.fly.mushroom_body import (
     PNKCCircuit,
     degree_preserving,
     erdos_renyi,
     extract_pn_kc,
+    glomerulus_uniform,
 )
 
 pd = pytest.importorskip("pandas")
@@ -175,3 +177,30 @@ def test_nearest_neighbor_restricts_to_seen_classes() -> None:
     query = torch.tensor([[1.0, 0.1]])
     assert learner.predict(query, seen=3).item() == 2
     assert learner.predict(query, seen=2).item() == 0
+
+
+def test_glomerulus_uniform_keeps_in_degree_and_flattens_sampling() -> None:
+    real = _circuit(n_kc=400, n_pn=12, per_kc=3)
+    null = glomerulus_uniform(real, np.random.default_rng(3))
+    np.testing.assert_array_equal(null.kc_in_degree(), real.kc_in_degree())
+    assert np.unique(null.edge_kc * null.n_pn + null.edge_pn).size == null.n_edges
+    glomerulus = np.array(null.pn_glomerulus)[null.edge_pn]
+    counts = np.unique(glomerulus, return_counts=True)[1]
+    assert counts.max() / counts.min() < 1.4  # six glomeruli, ~200 edges each
+
+
+def test_door_block_selects_measured_glomeruli_and_odors(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    (tmp_path / "r.csv").write_text(
+        '"R1";"R2";"R3"\n"SFR";0;0;0\n"o1";0.5;NA;0.1\n"o2";0.2;0.4;NA\n"o3";NA;NA;0.9\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "m.csv").write_text(
+        '"receptor";"glomerulus"\n"1";"R1";"DA1"\n"2";"R2";"VA1v"\n"3";"R3";"DL5"\n',
+        encoding="utf-8",
+    )
+    block = load_door_block(
+        tmp_path / "r.csv", tmp_path / "m.csv", {"DA1", "DL5"}, n_glomeruli=2, min_coverage=1.0
+    )
+    assert block.glomeruli == ("DA1", "DL5")
+    assert block.odors == ("o1",)
+    assert block.responses.tolist() == [[0.5, 0.1]]
