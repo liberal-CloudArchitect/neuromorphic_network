@@ -147,4 +147,6 @@ last_updated: 2026-10-04
 | F1k | 记忆特异的 MBON→DAN 回路：KC 侧突触标签与兴奋性谷氨酸（seeds 170–179） | DONE | K1 标签带来特异巩固 +0.023、K2 消除漂移 +0.068（均支持，24/24 网格点）；K3 不依赖真实接线；K4/K5 兴奋性谷氨酸消除漂移但不巩固；K7 反转代价 +0.018 低于门槛（`docs/fly/F1k-report.md`） |
 | F1l | hemibrain PB 小球相位：结构与路径积分（seeds 160–169） | DONE | S1/S2 按字面未通过（左右 PB 交错半格；PEN 偏移 ±65–70°，一致性 0.998；谱坐标压缩约 5 倍）；P3 INVALID；P1、P2、P4 不支持：路径积分未复现，FlyWire 上的记忆优势未在 hemibrain 重复；发现搜索偏爱静默解（`docs/fly/F1l-report.md`） |
 | F1m | 活动下限修正搜索后，FlyWire 与 hemibrain 的 CX 记忆优势（seeds 180–189） | DONE | M1 FlyWire 突触数 +0.409、M2 二值 +0.279 支持；M3 hemibrain 突触数 +0.025、M4 边数匹配二值 +0.049 不支持 → 数据集特异；下限没有改变任何结论，F1c-v4 不是退化解造成的（`docs/fly/F1m-report.md`） |
+| F1n | 输入组成互换：FlyWire/hemibrain 记忆差异的原因（seeds 190–199） | DONE | N1–N3 不支持：差异不来自类型级组成；事后诊断发现 hemibrain bump 全部钉在同一位置，原因是逐 body 递质预测把 38/46 个 EPG、一半 PEN 标成谷氨酸（`docs/fly/F1n-report.md`） |
+| F1o | 按细胞类型统一递质符号后重测 hemibrain 记忆（seeds 200–209） | DONE | O1 +0.628、O2 +0.309、O3 +0.536 全部支持：hemibrain real 0.961，记忆优势跨数据集成立；F1l/F1m 的 hemibrain 结果已加勘误（`docs/fly/F1o-report.md`） |
 | F1-SUM | F1 阶段总结与主线迁移建议 | DONE | `docs/fly/F1-summary.md` |
