@@ -134,4 +134,6 @@ last_updated: 2026-10-04
 | F1c | 中央复合体环形吸引子（预注册，seeds 50–59） | DONE | 结构：仅真实接线呈环（谱间隙）；动力学：均匀参数速率模型 J1–J3 全部不支持（`docs/fly/F1c-report.md`） |
 | F1c-v2 | 训练细胞类型参数的环形吸引子（预注册，seeds 60–69） | INVALID | 三张图的训练都退化为全网静默，损失停在机会水平；不构成拓扑证据，需要新协议 |
 | F1d | 真实气味统计（DoOR，预注册，seeds 70–79） | DONE | L1/L2 不支持（采样偏好无判别收益）；L3 real 略优于保度零模型 +0.7pp（`docs/fly/F1d-report.md`） |
+| F1e | MBON→DAN 反馈回路结构检验（预注册） | DONE | O1 互惠反馈富集 7.3× 支持；O2 抑制偏好不显著（`docs/fly/F1e-report.md`） |
+| F1c-v3 | 带资格检查的类型参数环形吸引子 | IN_PROGRESS | 协议已冻结（`d785823`） |
 | F1-SUM | F1 阶段总结与主线迁移建议 | DONE | `docs/fly/F1-summary.md` |
