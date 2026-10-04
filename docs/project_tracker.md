@@ -141,5 +141,5 @@ last_updated: 2026-10-04
 | F1f-v2 | 记忆与转动联合等预算搜索（预注册，seeds 100–109） | DONE | 阳性对照通过（记忆 1.0、A 1.0）；real 找不到联合解，S1–S3 不支持；路径积分在本抽象中未复现 |
 | F1g | 细化路径积分（LNO 角速度、ER 视觉、二值权重） | INVALID | 资格检查失败：理想环的亚阈值突触在二值阈值下被删除；结构检查已完成（左右 PEN 偏移方向相反，Delta7 抑制相反方向） |
 | F1g-v2 | 细化路径积分（修正阳性对照，seeds 130–139） | DONE | 阳性对照通过；V1–V3 不支持：经真实 ER 去抑制提示，三张图都无法形成定位的 bump（记忆搜索最好约 0.33），A 不可解读。与“ER→EPG 映射靠可塑性习得”的生物学一致 |
-| F1h | 动态 compartment 读出（真实 MBON→DAN 回路） | IN_PROGRESS | 协议已冻结（`d1d87c4`） |
+| F1h | 动态 compartment 读出（真实 MBON→DAN 回路，seeds 120–129） | DONE | W1/W2 按字面支持、W3 非劣；事后对照显示优势来自标定区间不同，参数匹配时真实回路不优于重连回路，在慢区间更差（`docs/fly/F1h-report.md`） |
 | F1-SUM | F1 阶段总结与主线迁移建议 | DONE | `docs/fly/F1-summary.md` |
