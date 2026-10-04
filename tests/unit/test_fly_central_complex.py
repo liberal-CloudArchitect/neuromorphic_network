@@ -230,3 +230,45 @@ def test_ideal_rotating_ring_offsets() -> None:
     assert ring.side[left_pen] == "left" and ring.side[right_pen] == "right"
     assert set(ring.cell_type) == {"EPG", "PEN_a(PEN1)", "Delta7"}
     assert ring.sign[-1] == -1.0 and ring.sign[0] == 1.0
+
+
+def test_binary_weights_threshold_and_shared_scale() -> None:
+    ring = _ring()
+    binary = ring.signed_matrix(binary=True, threshold=5)
+    assert set(np.unique(np.abs(binary))) <= {0.0, 1.0}
+    assert binary[1, 0] == 1.0 and binary[2, 0] == 0.0  # near=10 kept, far=4 dropped
+    scale = ring.weight_scale(binary=True, threshold=5)
+    np.testing.assert_allclose(ring.weights(binary=True, threshold=5), binary / scale)
+
+
+def test_ideal_pathways_offsets_and_phase_simulation() -> None:
+    from neuromorphic.fly.central_complex import (
+        ideal_input_pathways,
+        ideal_rotating_ring,
+        pen_offsets,
+        simulate_phases,
+    )
+
+    ring = ideal_rotating_ring(n_ring=16, n_inhibitory=2)
+    angles = -math.pi + 2 * math.pi * np.arange(16) / 16
+    er, lno = ideal_input_pathways(ring, n_ring=16)
+    preferred, strength = er.preferred_angles(ring, angles)
+    np.testing.assert_allclose(preferred, angles, atol=1e-9)
+    np.testing.assert_allclose(strength, 1.0)
+    assert lno.weights(1.0)[16:32, 0].min() == -6.0 and lno.weights(1.0)[16:32, 1].max() == 0.0
+    offsets = pen_offsets(ring, angles)
+    left = offsets["PEN_a(PEN1)|left"][0]
+    right = offsets["PEN_a(PEN1)|right"][0]
+    assert left == pytest.approx(2 * math.pi / 16) and right == pytest.approx(-2 * math.pi / 16)
+    protocol = MemoryProtocol(noise_sd=0.0)
+    out = simulate_phases(
+        torch.as_tensor(ring.weights(), dtype=torch.float32),
+        torch.ones(2, ring.n),
+        torch.zeros(2, ring.n),
+        [(5, None), (5, torch.ones(2, ring.n)), (10, None)],
+        readout_phase=2,
+        readout_ms=5,
+        protocol=protocol,
+        generator=torch.Generator().manual_seed(0),
+    )
+    assert out.shape == (2, ring.n) and torch.all(out >= 0)

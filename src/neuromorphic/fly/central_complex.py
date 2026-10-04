@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal
@@ -64,11 +65,25 @@ class CXCircuit:
         matrix[self.edge_post, self.edge_pre] = self.edge_count
         return matrix
 
-    def weights(self) -> FloatArray:
+    def signed_matrix(self, *, binary: bool = False, threshold: float = 5.0) -> FloatArray:
+        """``W[post, pre]`` as signed counts, or signed 0/1 for counts >= ``threshold``."""
+
+        counts = self.counts()
+        if binary:
+            counts = (counts >= threshold).astype(np.float64)
+        return counts * self.sign[None, :]
+
+    def weight_scale(self, *, binary: bool = False, threshold: float = 5.0) -> float:
+        """Median absolute input sum; shared by recurrent and external pathways."""
+
+        signed = self.signed_matrix(binary=binary, threshold=threshold)
+        return float(np.median(np.abs(signed).sum(axis=1)))
+
+    def weights(self, *, binary: bool = False, threshold: float = 5.0) -> FloatArray:
         """Signed weights ``W[post, pre]`` scaled by the median absolute input."""
 
-        signed = self.counts() * self.sign[None, :]
-        scale = float(np.median(np.abs(signed).sum(axis=1)))
+        signed = self.signed_matrix(binary=binary, threshold=threshold)
+        scale = self.weight_scale(binary=binary, threshold=threshold)
         return signed / scale if scale > 0 else signed
 
     def save(self, path: Path) -> None:
@@ -538,3 +553,156 @@ def ideal_rotating_ring(n_ring: int = 48, n_inhibitory: int = 8) -> CXCircuit:
         edge_count=np.array(count),
         topology="ideal_rotating_ring",
     )
+
+
+@dataclass(frozen=True, slots=True)
+class InputPathway:
+    """External neurons projecting into a core circuit (no own dynamics).
+
+    ``counts[core, source]`` are synapse counts onto core neurons; ``sign`` is
+    per source neuron (from its transmitter).
+    """
+
+    ids: IntArray
+    cell_type: tuple[str, ...]
+    side: tuple[str, ...]
+    sign: FloatArray
+    counts: FloatArray
+
+    def __post_init__(self) -> None:
+        n = self.ids.shape[0]
+        if len(self.cell_type) != n or len(self.side) != n or self.sign.shape != (n,):
+            raise ValueError("source annotations must align with ids")
+        if self.counts.ndim != 2 or self.counts.shape[1] != n:
+            raise ValueError("counts must be [core, source]")
+
+    def weights(self, scale: float, *, binary: bool = False, threshold: float = 5.0) -> FloatArray:
+        counts = (self.counts >= threshold).astype(np.float64) if binary else self.counts
+        return counts * self.sign[None, :] / scale
+
+    def preferred_angles(
+        self, circuit: CXCircuit, ring_angles: FloatArray, ring_type: str = "EPG"
+    ) -> tuple[FloatArray, FloatArray]:
+        """Synapse-weighted circular mean of target ring angles and its tuning strength."""
+
+        ring = circuit.indices(ring_type)
+        w = self.counts[ring, :]
+        vector = (w * np.exp(1j * ring_angles)[:, None]).sum(axis=0)
+        total = w.sum(axis=0)
+        strength = np.where(total > 0, np.abs(vector) / np.where(total > 0, total, 1.0), 0.0)
+        return np.angle(vector), strength
+
+
+def extract_input_pathway(
+    annotations: Any, connections: Any, circuit: CXCircuit, *, source_types: Iterable[str]
+) -> InputPathway:
+    sources = annotations[annotations.cell_type.isin(list(source_types))].sort_values("root_id")
+    ids = sources.root_id.to_numpy().astype(np.int64)
+    edges = connections[
+        connections.pre_pt_root_id.isin(ids) & connections.post_pt_root_id.isin(circuit.ids)
+    ]
+    pairs = edges.groupby(["pre_pt_root_id", "post_pt_root_id"], as_index=False).syn_count.sum()
+    counts = np.zeros((circuit.n, ids.size))
+    counts[
+        np.searchsorted(circuit.ids, pairs.post_pt_root_id.to_numpy()),
+        np.searchsorted(ids, pairs.pre_pt_root_id.to_numpy()),
+    ] = pairs.syn_count.to_numpy()
+    transmitter = sources.top_nt.astype(str).str.lower()
+    return InputPathway(
+        ids=ids,
+        cell_type=tuple(sources.cell_type.astype(str)),
+        side=tuple(sources.side.astype(str)),
+        sign=np.where(transmitter.isin(INHIBITORY_TRANSMITTERS), -1.0, 1.0),
+        counts=counts,
+    )
+
+
+def simulate_phases(
+    weights: Tensor,
+    gain: Tensor,
+    bias: Tensor,
+    phases: list[tuple[int, Tensor | None]],
+    *,
+    readout_phase: int,
+    readout_ms: int,
+    protocol: MemoryProtocol,
+    generator: torch.Generator,
+) -> Tensor:
+    """Run ``(duration_ms, external_input [batch, neurons] or None)`` phases.
+
+    Returns mean rates over the last ``readout_ms`` of ``readout_phase``.  Gain
+    and bias are per-neuron ``[batch, neurons]``; dynamics as :func:`simulate_memory`.
+    """
+
+    batch, neurons = gain.shape
+    device = gain.device
+    rate = torch.zeros(batch, neurons, device=device)
+    step = protocol.dt_ms / protocol.tau_ms
+    readout = torch.zeros(batch, neurons, device=device)
+    readout_steps = round(readout_ms / protocol.dt_ms)
+    for index, (duration, external) in enumerate(phases):
+        steps = round(duration / protocol.dt_ms)
+        for t in range(steps):
+            drive = gain * (rate @ weights.T) + bias
+            if external is not None:
+                drive = drive + external
+            noise = (
+                torch.randn(batch, neurons, generator=generator, device=device) * protocol.noise_sd
+            )
+            rate = rate + step * (-rate + _activate(drive + noise, protocol.activation))
+            if index == readout_phase and t >= steps - readout_steps:
+                readout = readout + rate
+    return readout / readout_steps
+
+
+def ideal_input_pathways(ring: CXCircuit, n_ring: int = 48) -> tuple[InputPathway, InputPathway]:
+    """Ideal ER (ER_j inhibits EPG_j) and LNO (one per side, inhibits all same-side PENs)."""
+
+    er_counts = np.zeros((ring.n, n_ring))
+    er_counts[np.arange(n_ring), np.arange(n_ring)] = 6.0
+    er = InputPathway(
+        ids=np.arange(1000, 1000 + n_ring, dtype=np.int64),
+        cell_type=("ER",) * n_ring,
+        side=("right",) * n_ring,
+        sign=-np.ones(n_ring),
+        counts=er_counts,
+    )
+    pen = np.array([t.startswith("PEN") for t in ring.cell_type])
+    side = np.array(ring.side)
+    lno_counts = np.zeros((ring.n, 2))
+    lno_counts[pen & (side == "left"), 0] = 6.0
+    lno_counts[pen & (side == "right"), 1] = 6.0
+    lno = InputPathway(
+        ids=np.array([2000, 2001], dtype=np.int64),
+        cell_type=("LNO", "LNO"),
+        side=("left", "right"),
+        sign=-np.ones(2),
+        counts=lno_counts,
+    )
+    return er, lno
+
+
+def pen_offsets(circuit: CXCircuit, ring_angles: FloatArray) -> dict[str, tuple[float, float]]:
+    """Per (PEN type, side): circular mean of output-minus-input EPG angle and its length."""
+
+    counts = circuit.counts()
+    epg = circuit.indices("EPG")
+    phase = np.exp(1j * ring_angles)
+    out: dict[str, tuple[float, float]] = {}
+    for kind in ("PEN_a(PEN1)", "PEN_b(PEN2)"):
+        for side in ("left", "right"):
+            members = [
+                i
+                for i, (t, s) in enumerate(zip(circuit.cell_type, circuit.side, strict=True))
+                if t == kind and s == side
+            ]
+            offsets = []
+            for i in members:
+                inbound = (counts[i, epg] * phase).sum()
+                outbound = (counts[epg, i] * phase).sum()
+                if abs(inbound) > 0 and abs(outbound) > 0:
+                    offsets.append(np.angle(outbound / inbound))
+            if offsets:
+                mean = np.exp(1j * np.array(offsets)).mean()
+                out[f"{kind}|{side}"] = (float(np.angle(mean)), float(abs(mean)))
+    return out
