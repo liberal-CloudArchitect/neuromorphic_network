@@ -144,4 +144,6 @@ last_updated: 2026-10-04
 | F1h | 动态 compartment 读出（真实 MBON→DAN 回路，seeds 120–129） | DONE | W1/W2 按字面支持、W3 非劣；事后对照显示优势来自标定区间不同，参数匹配时真实回路不优于重连回路，在慢区间更差（`docs/fly/F1h-report.md`） |
 | F1i | 可塑 ER→EPG 视觉映射与 LNO 驱动转动（seeds 140–149） | DONE | I1 学习映射比解剖映射记忆高 26.8pp、I2 比 type_preserving 高 26.4pp，均支持；I3/I4 转动不支持；I5 按字面支持但转动量为噪声级（`docs/fly/F1i-report.md`） |
 | F1j | 正反馈 MBON→DAN 回路的功能（共用参数网格，seeds 150–159） | DONE | J1 特异巩固被否证（−0.038，方向相反）；J2/J3 共模漂移支持（新异气味偏向趋近 +0.098，符号取反则反向）；J4 不依赖真实接线（重连漂移更强）；J5 略低于门槛（`docs/fly/F1j-report.md`） |
+| F1k | 记忆特异的 MBON→DAN 回路：KC 侧突触标签与兴奋性谷氨酸（seeds 170–179） | DONE | K1 标签带来特异巩固 +0.023、K2 消除漂移 +0.068（均支持，24/24 网格点）；K3 不依赖真实接线；K4/K5 兴奋性谷氨酸消除漂移但不巩固；K7 反转代价 +0.018 低于门槛（`docs/fly/F1k-report.md`） |
+| F1l | hemibrain PB 小球相位：结构与路径积分（seeds 160–169） | DONE | S1/S2 按字面未通过（左右 PB 交错半格；PEN 偏移 ±65–70°，一致性 0.998；谱坐标压缩约 5 倍）；P3 INVALID；P1、P2、P4 不支持：路径积分未复现，FlyWire 上的记忆优势未在 hemibrain 重复；发现搜索偏爱静默解（`docs/fly/F1l-report.md`） |
 | F1-SUM | F1 阶段总结与主线迁移建议 | DONE | `docs/fly/F1-summary.md` |
