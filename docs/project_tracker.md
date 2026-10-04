@@ -146,4 +146,5 @@ last_updated: 2026-10-04
 | F1j | 正反馈 MBON→DAN 回路的功能（共用参数网格，seeds 150–159） | DONE | J1 特异巩固被否证（−0.038，方向相反）；J2/J3 共模漂移支持（新异气味偏向趋近 +0.098，符号取反则反向）；J4 不依赖真实接线（重连漂移更强）；J5 略低于门槛（`docs/fly/F1j-report.md`） |
 | F1k | 记忆特异的 MBON→DAN 回路：KC 侧突触标签与兴奋性谷氨酸（seeds 170–179） | DONE | K1 标签带来特异巩固 +0.023、K2 消除漂移 +0.068（均支持，24/24 网格点）；K3 不依赖真实接线；K4/K5 兴奋性谷氨酸消除漂移但不巩固；K7 反转代价 +0.018 低于门槛（`docs/fly/F1k-report.md`） |
 | F1l | hemibrain PB 小球相位：结构与路径积分（seeds 160–169） | DONE | S1/S2 按字面未通过（左右 PB 交错半格；PEN 偏移 ±65–70°，一致性 0.998；谱坐标压缩约 5 倍）；P3 INVALID；P1、P2、P4 不支持：路径积分未复现，FlyWire 上的记忆优势未在 hemibrain 重复；发现搜索偏爱静默解（`docs/fly/F1l-report.md`） |
+| F1m | 活动下限修正搜索后，FlyWire 与 hemibrain 的 CX 记忆优势（seeds 180–189） | DONE | M1 FlyWire 突触数 +0.409、M2 二值 +0.279 支持；M3 hemibrain 突触数 +0.025、M4 边数匹配二值 +0.049 不支持 → 数据集特异；下限没有改变任何结论，F1c-v4 不是退化解造成的（`docs/fly/F1m-report.md`） |
 | F1-SUM | F1 阶段总结与主线迁移建议 | DONE | `docs/fly/F1-summary.md` |
