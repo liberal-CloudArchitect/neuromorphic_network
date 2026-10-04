@@ -9,6 +9,7 @@ import torch
 from neuromorphic.fly.central_complex import (
     CXCircuit,
     MemoryProtocol,
+    coactivity_map,
     cue_bins,
     degree_preserving_directed,
     extract_cx,
@@ -18,6 +19,7 @@ from neuromorphic.fly.central_complex import (
     template_accuracy,
     train_type_parameters,
     type_preserving,
+    visual_responses,
 )
 
 pd = pytest.importorskip("pandas")
@@ -272,3 +274,19 @@ def test_ideal_pathways_offsets_and_phase_simulation() -> None:
         generator=torch.Generator().manual_seed(0),
     )
     assert out.shape == (2, ring.n) and torch.all(out >= 0)
+
+
+def test_coactivity_map_peaks_where_visual_and_ring_angles_match() -> None:
+    epg = -np.pi + 2 * np.pi * np.arange(16) / 16
+    preferred = np.array([epg[3], epg[11]])
+    z = coactivity_map(epg, preferred, kappa_visual=2.0, kappa_bump=2.5)
+    assert z.shape == (16, 2)
+    assert z.argmax(axis=0).tolist() == [3, 11]
+    np.testing.assert_allclose(z.max(axis=0), 1.0)
+    assert z.min() > 0.0
+    # Learned inhibition from ER 0 is weakest onto EPG 3 and strongest opposite it.
+    learned = np.exp(-5.0 * z[:, 0])
+    assert learned.argmin() == 3 and learned.argmax() == 11
+    response = visual_responses(preferred, np.array([epg[3]]), 2.0)
+    np.testing.assert_allclose(response[0, 0], 1.0)
+    assert response[0, 1] < 0.02

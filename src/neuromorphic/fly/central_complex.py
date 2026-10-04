@@ -706,3 +706,33 @@ def pen_offsets(circuit: CXCircuit, ring_angles: FloatArray) -> dict[str, tuple[
                 mean = np.exp(1j * np.array(offsets)).mean()
                 out[f"{kind}|{side}"] = (float(np.angle(mean)), float(abs(mean)))
     return out
+
+
+def visual_responses(preferred: FloatArray, headings: FloatArray, kappa: float) -> FloatArray:
+    """Von Mises responses ``[headings, neurons]`` in (0, 1], peaking at ``preferred``."""
+
+    return np.exp(kappa * (np.cos(headings[:, None] - preferred[None, :]) - 1.0))
+
+
+def coactivity_map(
+    epg_angles: FloatArray,
+    visual_preferred: FloatArray,
+    *,
+    kappa_visual: float,
+    kappa_bump: float,
+    n_headings: int = 64,
+) -> FloatArray:
+    """Normalized ER-EPG co-activity ``Z[epg, er]`` over uniformly sampled headings (F1i).
+
+    During training the heading bump sits at each heading (teacher) while ring
+    neurons respond to the visual scene.  ``Z`` is each ER neuron's co-activity
+    divided by its maximum over EPGs; co-activity depression of the inhibitory
+    ER->EPG synapse (Kim et al. 2019; Fisher et al. 2019) gives the learned
+    weight ``anatomical * exp(-beta * Z)``.
+    """
+
+    headings = -math.pi + 2.0 * math.pi * np.arange(n_headings) / n_headings
+    visual = visual_responses(visual_preferred, headings, kappa_visual)  # [H, ER]
+    bump = visual_responses(epg_angles, headings, kappa_bump)  # [H, EPG]
+    coactivity = bump.T @ visual / n_headings
+    return coactivity / coactivity.max(axis=0, keepdims=True)
