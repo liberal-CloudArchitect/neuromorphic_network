@@ -736,3 +736,45 @@ def coactivity_map(
     bump = visual_responses(epg_angles, headings, kappa_bump)  # [H, EPG]
     coactivity = bump.T @ visual / n_headings
     return coactivity / coactivity.max(axis=0, keepdims=True)
+
+
+def type_composition(circuit: CXCircuit, types: tuple[str, ...] = CORE_TYPES) -> FloatArray:
+    """Input mix ``S[post type, pre type]``: each post type's synapse share from each pre type.
+
+    Type gains scale a post type's whole input, so this mix (its excitation versus
+    inhibition included) is what a type-parameter model cannot change (F1n).
+    """
+
+    counts = circuit.counts()
+    groups = [circuit.indices(t) for t in types]
+    block: FloatArray = np.array(
+        [[counts[np.ix_(post, pre)].sum() for pre in groups] for post in groups]
+    )
+    total = block.sum(axis=1, keepdims=True)
+    shares: FloatArray = np.divide(block, total, out=np.zeros_like(block), where=total > 0)
+    return shares
+
+
+def match_composition(
+    circuit: CXCircuit, target: FloatArray, types: tuple[str, ...] = CORE_TYPES
+) -> CXCircuit:
+    """Scale every (pre type -> post type) block so the input mix equals ``target``.
+
+    Within-block wiring is untouched.  Blocks absent from the circuit stay absent
+    and the target is renormalized over the blocks that exist.
+    """
+
+    current = type_composition(circuit, types)
+    present = current > 0
+    wanted = np.where(present, target, 0.0)
+    totals = wanted.sum(axis=1, keepdims=True)
+    wanted = np.divide(wanted, totals, out=np.zeros_like(wanted), where=totals > 0)
+    factor = np.divide(wanted, current, out=np.ones_like(current), where=present)
+    code = {t: i for i, t in enumerate(types)}
+    post = np.array([code[circuit.cell_type[q]] for q in circuit.edge_post.tolist()])
+    pre = np.array([code[circuit.cell_type[p]] for p in circuit.edge_pre.tolist()])
+    return replace(
+        circuit,
+        edge_count=circuit.edge_count * factor[post, pre],
+        topology=f"{circuit.topology}+composition",
+    )

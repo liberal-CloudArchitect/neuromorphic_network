@@ -14,10 +14,12 @@ from neuromorphic.fly.central_complex import (
     degree_preserving_directed,
     extract_cx,
     ideal_ring_circuit,
+    match_composition,
     ring_embedding,
     simulate_memory,
     template_accuracy,
     train_type_parameters,
+    type_composition,
     type_preserving,
     visual_responses,
 )
@@ -290,3 +292,19 @@ def test_coactivity_map_peaks_where_visual_and_ring_angles_match() -> None:
     response = visual_responses(preferred, np.array([epg[3]]), 2.0)
     np.testing.assert_allclose(response[0, 0], 1.0)
     assert response[0, 1] < 0.02
+
+
+def test_match_composition_sets_each_post_types_input_mix() -> None:
+    ring = ideal_ring_circuit(16, 4)
+    types = ("EPG", "Delta7")
+    before = type_composition(ring, types)
+    np.testing.assert_allclose(before.sum(axis=1), 1.0)
+    target = np.array([[0.4, 0.6], [1.0, 0.0]])  # EPG gets 60% inhibition; Delta7 block absent
+    matched = match_composition(ring, target, types)
+    np.testing.assert_allclose(type_composition(matched, types), target, atol=1e-12)
+    # Within-block wiring is untouched: the same edges, rescaled by one factor per block.
+    assert np.array_equal(matched.edge_pre, ring.edge_pre)
+    assert np.array_equal(matched.edge_post, ring.edge_post)
+    ratio = matched.edge_count / ring.edge_count
+    epg_to_epg = (ring.edge_pre < 16) & (ring.edge_post < 16)
+    assert np.allclose(ratio[epg_to_epg], ratio[epg_to_epg][0])
