@@ -1,6 +1,6 @@
-# Reviewed public fly datasets (CR-013). Download only after explicit approval.
+# Reviewed public fly datasets (CR-013). Each download set requires explicit user approval.
 schema_version: fly-datasets-v1
-status: PENDING_APPROVAL
+status: 'APPROVED: T0-full, T1 (2026-10-04); T1-door (2026-10-04)'
 source: docs/fly/dataset_inventory.md
 root: data/fly
 files:
@@ -152,3 +152,33 @@ files:
   license: CC-BY-4.0
   sets:
   - T1
+- dataset: door
+  version: db323a4
+  file_name: door_response_matrix.csv
+  url: https://raw.githubusercontent.com/ropensci/DoOR.data/db323a496577c4b4a72b5c2fcd1859e07521ffb5/data/door_response_matrix.csv
+  size_bytes: 295852
+  checksum_algorithm: git-blob-sha1
+  checksum: 23f0732c55d700567be54f68f20cb45fd10c51df
+  license: CC-BY-SA-4.0
+  sets:
+  - T1-door
+- dataset: door
+  version: db323a4
+  file_name: door_mappings.csv
+  url: https://raw.githubusercontent.com/ropensci/DoOR.data/db323a496577c4b4a72b5c2fcd1859e07521ffb5/data/door_mappings.csv
+  size_bytes: 12824
+  checksum_algorithm: git-blob-sha1
+  checksum: 2f5d9c6fcac5b450b152401072e6f86a440dfb3a
+  license: CC-BY-SA-4.0
+  sets:
+  - T1-door
+- dataset: door
+  version: db323a4
+  file_name: odor.csv
+  url: https://raw.githubusercontent.com/ropensci/DoOR.data/db323a496577c4b4a72b5c2fcd1859e07521ffb5/data/odor.csv
+  size_bytes: 155880
+  checksum_algorithm: git-blob-sha1
+  checksum: ed32e0a692694f9c0da3356dc75e04d6ccdc05df
+  license: CC-BY-SA-4.0
+  sets:
+  - T1-door
