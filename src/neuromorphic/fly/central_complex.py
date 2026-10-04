@@ -427,3 +427,80 @@ def ideal_ring_circuit(
         edge_count=np.array(count),
         topology="ideal_ring",
     )
+
+
+def simulate_rotation(
+    weights: Tensor,
+    cue_inputs: Tensor,
+    drive_inputs: Tensor,
+    gain: Tensor,
+    bias: Tensor,
+    *,
+    protocol: MemoryProtocol,
+    generator: torch.Generator,
+    hold_ms: int = 500,
+    drive_ms: int = 300,
+    readout_ms: int = 100,
+) -> Tensor:
+    """Cue, hold, then apply ``drive_inputs``; return mean rates over the last ``readout_ms``.
+
+    ``gain``/``bias`` are per-neuron ``[batch, neurons]``.  Dynamics and noise
+    follow :func:`simulate_memory` (F1f path integration).
+    """
+
+    batch, neurons = cue_inputs.shape
+    device = cue_inputs.device
+    rate = torch.zeros(batch, neurons, device=device)
+    step = protocol.dt_ms / protocol.tau_ms
+    phases = (
+        (protocol.baseline_ms, None),
+        (protocol.cue_ms, cue_inputs),
+        (hold_ms, None),
+        (drive_ms, drive_inputs),
+    )
+    readout = torch.zeros(batch, neurons, device=device)
+    readout_steps = round(readout_ms / protocol.dt_ms)
+    for phase, (duration, extra) in enumerate(phases):
+        steps = round(duration / protocol.dt_ms)
+        for t in range(steps):
+            drive = gain * (rate @ weights.T) + bias
+            if extra is not None:
+                drive = drive + (protocol.cue_amplitude if phase == 1 else 1.0) * extra
+            noise = (
+                torch.randn(batch, neurons, generator=generator, device=device) * protocol.noise_sd
+            )
+            rate = rate + step * (-rate + _activate(drive + noise, protocol.activation))
+            if phase == 3 and t >= steps - readout_steps:
+                readout = readout + rate
+    return readout / readout_steps
+
+
+def decode_angle(activity: Tensor, angles: FloatArray) -> Tensor:
+    """Population-vector angle of ``activity[:, ring]`` given ring angles."""
+
+    phi = torch.as_tensor(angles, dtype=activity.dtype, device=activity.device)
+    return torch.atan2(activity @ torch.sin(phi), activity @ torch.cos(phi))
+
+
+def _wrap(x: Tensor) -> Tensor:
+    return torch.remainder(x + math.pi, 2 * math.pi) - math.pi
+
+
+def _circular_mean(theta: Tensor, dim: int) -> Tensor:
+    return torch.atan2(torch.sin(theta).mean(dim), torch.cos(theta).mean(dim))
+
+
+def antisymmetry_index(none: Tensor, left: Tensor, right: Tensor) -> tuple[float, float]:
+    """Antisymmetry of left/right-driven bump shifts; inputs are ``[cues, trials]`` angles.
+
+    Returns ``A = -sum dL*dR / (0.5 * sum(dL^2 + dR^2))`` over cues (1 for equal
+    and opposite shifts, about 0 for unrelated, -1 for same-direction) and the
+    mean absolute shift in radians.
+    """
+
+    base = _circular_mean(none, 1)
+    d_left = _wrap(_circular_mean(left, 1) - base)
+    d_right = _wrap(_circular_mean(right, 1) - base)
+    energy = 0.5 * float((d_left**2 + d_right**2).sum())
+    index = -float((d_left * d_right).sum()) / energy if energy > 0 else 0.0
+    return index, float(torch.cat([d_left.abs(), d_right.abs()]).mean())

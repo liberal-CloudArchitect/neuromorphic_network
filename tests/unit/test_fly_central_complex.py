@@ -178,3 +178,42 @@ def test_ideal_ring_is_a_ring() -> None:
     steps = np.diff(np.concatenate([order, order[:1]])) % 48
     assert np.all(np.isin(steps, (1, 47)))
     assert eigenvalues[1] == pytest.approx(eigenvalues[2], rel=1e-6)  # exact ring symmetry
+
+
+def test_antisymmetry_index_and_angle_decoding() -> None:
+    from neuromorphic.fly.central_complex import antisymmetry_index, decode_angle
+
+    angles = np.linspace(-math.pi, math.pi, 8, endpoint=False)
+    activity = torch.zeros(2, 8)
+    activity[0, 2] = 1.0
+    activity[1, 6] = 1.0
+    decoded = decode_angle(activity, angles)
+    assert decoded[0].item() == pytest.approx(angles[2], abs=1e-6)
+    none = torch.zeros(3, 4)
+    opposite, shift = antisymmetry_index(none, none + 0.3, none - 0.3)
+    assert opposite == pytest.approx(1.0)
+    assert shift == pytest.approx(0.3, abs=1e-6)
+    same, _ = antisymmetry_index(none, none + 0.3, none + 0.3)
+    assert same == pytest.approx(-1.0)
+    assert antisymmetry_index(none, none, none)[0] == 0.0
+
+
+def test_rotation_simulation_shapes() -> None:
+    from neuromorphic.fly.central_complex import simulate_rotation
+
+    ring = _ring()
+    protocol = MemoryProtocol(baseline_ms=5, cue_ms=10, delay_ms=10, readout_ms=5)
+    out = simulate_rotation(
+        torch.as_tensor(ring.weights(), dtype=torch.float32),
+        torch.zeros(3, ring.n),
+        torch.ones(3, ring.n) * 0.1,
+        torch.ones(3, ring.n),
+        torch.zeros(3, ring.n),
+        protocol=protocol,
+        generator=torch.Generator().manual_seed(0),
+        hold_ms=10,
+        drive_ms=20,
+        readout_ms=5,
+    )
+    assert out.shape == (3, ring.n)
+    assert torch.all(out >= 0)
