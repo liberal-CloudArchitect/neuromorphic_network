@@ -142,5 +142,6 @@ last_updated: 2026-10-04
 | F1g | 细化路径积分（LNO 角速度、ER 视觉、二值权重） | INVALID | 资格检查失败：理想环的亚阈值突触在二值阈值下被删除；结构检查已完成（左右 PEN 偏移方向相反，Delta7 抑制相反方向） |
 | F1g-v2 | 细化路径积分（修正阳性对照，seeds 130–139） | DONE | 阳性对照通过；V1–V3 不支持：经真实 ER 去抑制提示，三张图都无法形成定位的 bump（记忆搜索最好约 0.33），A 不可解读。与“ER→EPG 映射靠可塑性习得”的生物学一致 |
 | F1h | 动态 compartment 读出（真实 MBON→DAN 回路，seeds 120–129） | DONE | W1/W2 按字面支持、W3 非劣；事后对照显示优势来自标定区间不同，参数匹配时真实回路不优于重连回路，在慢区间更差（`docs/fly/F1h-report.md`） |
+| F1i | 可塑 ER→EPG 视觉映射与 LNO 驱动转动（seeds 140–149） | DONE | I1 学习映射比解剖映射记忆高 26.8pp、I2 比 type_preserving 高 26.4pp，均支持；I3/I4 转动不支持；I5 按字面支持但转动量为噪声级（`docs/fly/F1i-report.md`） |
 | F1j | 正反馈 MBON→DAN 回路的功能（共用参数网格，seeds 150–159） | DONE | J1 特异巩固被否证（−0.038，方向相反）；J2/J3 共模漂移支持（新异气味偏向趋近 +0.098，符号取反则反向）；J4 不依赖真实接线（重连漂移更强）；J5 略低于门槛（`docs/fly/F1j-report.md`） |
 | F1-SUM | F1 阶段总结与主线迁移建议 | DONE | `docs/fly/F1-summary.md` |
