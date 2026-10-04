@@ -5,6 +5,11 @@ through the real DAN->MBON matrix; plasticity is dopamine-gated depression of
 active KC->MBON synapses plus recovery.  DAN activity is reward only (``none``),
 an ideal opponent RPE (``ideal``) or computed by the signed MBON->DAN feedback
 loop (``loop``).  Protocol: docs/fly/F1h-compartment-loop-protocol.md.
+
+Optional synaptic tags (F1k): reinforcement-driven teaching tags the active
+KC->MBON synapses of a compartment (a decaying, compartment-specific KC-side
+trace, cf. Rutabaga cAMP coincidence detection), and the loop-driven part of
+DAN activity can only change tagged synapses.
 """
 
 from __future__ import annotations
@@ -84,9 +89,12 @@ class CompartmentLearner:
         recovery: Tensor,
         gain: Tensor,
         feedback_gain: Tensor,
+        tag_decay: Tensor | None = None,
     ) -> None:
         if variant not in {"none", "ideal", "loop"}:
             raise ValueError(f"unknown variant: {variant}")
+        if tag_decay is not None and variant != "loop":
+            raise ValueError("synaptic tags only apply to the loop variant")
         self.readout = readout
         self.variant = variant
         self.eta = eta[:, None, None]
@@ -96,6 +104,8 @@ class CompartmentLearner:
         batch = eta.shape[0]
         self.base = readout.connectivity
         self.weights = readout.connectivity.expand(batch, -1, -1).clone()
+        self.tag_decay = None if tag_decay is None else tag_decay[:, None, None]
+        self.tags = None if tag_decay is None else torch.zeros_like(self.weights)
 
     def _readout(self, z: Tensor) -> tuple[Tensor, Tensor]:
         """MBON deviations from baseline ``[P, M]`` and decision values ``[P]``."""
@@ -140,8 +150,16 @@ class CompartmentLearner:
         else:
             loop_drive = (deviation * r.mbon_sign) @ r.feedback  # [P, D]
             dan = (reward_drive[None, :] + self.feedback_gain * loop_drive).clamp(min=0.0)
-        teaching = dan @ r.teach  # [P, M]
-        update = self.weights - self.eta * teaching[:, :, None] * z[None, None, :]
+        active = z[None, None, :]
+        if self.tags is None or self.tag_decay is None:
+            gated = (dan @ r.teach)[:, :, None] * active
+        else:
+            reinforced = torch.minimum(dan, reward_drive[None, :].expand_as(dan))
+            from_reward = (reinforced @ r.teach)[:, :, None] * active
+            from_loop = ((dan - reinforced) @ r.teach)[:, :, None] * active * self.tags
+            gated = from_reward + from_loop
+            self.tags = (self.tag_decay * self.tags + from_reward).clamp(max=1.0)
+        update = self.weights - self.eta * gated
         update = update + self.recovery * (self.base - update)
         self.weights = torch.minimum(update.clamp(min=0.0), 2.0 * self.base)
         return value

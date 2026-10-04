@@ -30,6 +30,7 @@ class OutputLoop:
     mbon_inhibitory: BoolArray
     teach: FloatArray
     feedback: FloatArray
+    mbon_transmitter: tuple[str, ...] = ()  # lower-case ``top_nt``; empty when unknown
 
     def __post_init__(self) -> None:
         d, m = self.dan_ids.size, self.mbon_ids.size
@@ -37,6 +38,8 @@ class OutputLoop:
             raise ValueError("teach must be [DAN, MBON] and feedback [MBON, DAN]")
         if self.mbon_inhibitory.shape != (m,):
             raise ValueError("one transmitter flag per MBON")
+        if self.mbon_transmitter and len(self.mbon_transmitter) != m:
+            raise ValueError("one transmitter name per MBON")
 
 
 def extract_output_loop(annotations: Any, connections: Any, *, side: str = "right") -> OutputLoop:
@@ -67,6 +70,7 @@ def extract_output_loop(annotations: Any, connections: Any, *, side: str = "righ
         mbon_inhibitory=mbons.top_nt.astype(str).str.lower().isin(INHIBITORY).to_numpy(),
         teach=matrix(dan_ids, mbon_ids),
         feedback=matrix(mbon_ids, dan_ids),
+        mbon_transmitter=tuple(mbons.top_nt.astype(str).str.lower()),
     )
 
 
