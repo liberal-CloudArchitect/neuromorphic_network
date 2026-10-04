@@ -97,8 +97,8 @@ class CompartmentLearner:
         self.base = readout.connectivity
         self.weights = readout.connectivity.expand(batch, -1, -1).clone()
 
-    def step(self, z: Tensor, reward: int) -> Tensor:
-        """Predict values for code ``z`` [K], learn from ``reward``; returns ``v`` [P]."""
+    def _readout(self, z: Tensor) -> tuple[Tensor, Tensor]:
+        """MBON deviations from baseline ``[P, M]`` and decision values ``[P]``."""
 
         r = self.readout
         active = z.sum().clamp(min=1.0)
@@ -106,7 +106,21 @@ class CompartmentLearner:
         baseline = (self.base @ z) / active  # [M]
         denominator = (r.valence.abs() * baseline).sum().clamp(min=1e-9)
         deviation = output - baseline
-        value = 2.0 * (deviation * r.valence).sum(dim=1) / denominator  # [P]
+        return deviation, 2.0 * (deviation * r.valence).sum(dim=1) / denominator
+
+    def value(self, z: Tensor) -> Tensor:
+        """Predicted values ``v`` [P] for code ``z`` [K] without learning (test probes)."""
+
+        return self._readout(z)[1]
+
+    def step(self, z: Tensor, reward: int) -> Tensor:
+        """Predict values for code ``z`` [K], learn from ``reward``; returns ``v`` [P].
+
+        ``reward`` 0 (no reinforcement) leaves only the feedback loop to drive DANs.
+        """
+
+        r = self.readout
+        deviation, value = self._readout(z)
         reward_drive = torch.where(
             r.reward_family > 0,
             torch.tensor(float(max(reward, 0))),

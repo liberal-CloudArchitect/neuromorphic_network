@@ -85,3 +85,28 @@ def test_reversal_flips_sign_with_opponent_compartments() -> None:
 def test_invalid_variant_rejected() -> None:
     with pytest.raises(ValueError, match="variant"):
         _learner("other")
+
+
+def test_value_probe_does_not_learn() -> None:
+    z = torch.tensor([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
+    learner = _learner("none")
+    learner.step(z, 1)
+    before = learner.weights.clone()
+    probe = learner.value(z)
+    assert torch.equal(learner.weights, before)
+    assert probe.item() == pytest.approx(learner.step(z, 0).item())
+
+
+def test_unreinforced_positive_loop_keeps_depressing() -> None:
+    # Avoidance MBON 0 inhibits its own PAM: depression disinhibits PAM (positive loop).
+    z = torch.tensor([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
+    learner = _learner("loop", _loop(feedback_sign=-1.0))
+    learner.step(z, 1)
+    after_reward = learner.weights[0, 0, :3].clone()
+    learner.step(z, 0)
+    assert (learner.weights[0, 0, :3] < after_reward).all()
+    plain = _learner("none", _loop(feedback_sign=-1.0))
+    plain.step(z, 1)
+    held = plain.weights[0, 0, :3].clone()
+    plain.step(z, 0)
+    assert torch.equal(plain.weights[0, 0, :3], held)
