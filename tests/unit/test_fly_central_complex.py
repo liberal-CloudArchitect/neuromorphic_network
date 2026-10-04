@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -10,6 +11,7 @@ from neuromorphic.fly.central_complex import (
     CXCircuit,
     MemoryProtocol,
     coactivity_map,
+    consensus_signs,
     cue_bins,
     degree_preserving_directed,
     extract_cx,
@@ -308,3 +310,15 @@ def test_match_composition_sets_each_post_types_input_mix() -> None:
     ratio = matched.edge_count / ring.edge_count
     epg_to_epg = (ring.edge_pre < 16) & (ring.edge_post < 16)
     assert np.allclose(ratio[epg_to_epg], ratio[epg_to_epg][0])
+
+
+def test_consensus_signs_use_each_types_majority() -> None:
+    ring = ideal_ring_circuit(8, 3)
+    noisy = replace(ring, sign=np.array([1.0, -1.0, -1.0] + [1.0] * 5 + [-1.0, 1.0, -1.0]))
+    fixed = consensus_signs(noisy, ring)
+    assert fixed.sign.tolist() == ring.sign.tolist()
+    assert np.array_equal(fixed.edge_count, ring.edge_count)
+    # A type missing from the reference keeps its own signs.
+    other = replace(ring, cell_type=("EPG",) * 8 + ("PEG",) * 3)
+    kept = consensus_signs(noisy, other)
+    assert kept.sign[8:].tolist() == [-1.0, 1.0, -1.0]

@@ -778,3 +778,19 @@ def match_composition(
         edge_count=circuit.edge_count * factor[post, pre],
         topology=f"{circuit.topology}+composition",
     )
+
+
+def consensus_signs(circuit: CXCircuit, reference: CXCircuit) -> CXCircuit:
+    """Give each neuron its cell type's majority sign in ``reference`` (one transmitter per type).
+
+    Types missing from ``reference`` keep their own signs; ties count as excitatory.
+    """
+
+    majority = {
+        t: 1.0 if float(np.mean(reference.sign[reference.indices(t)] > 0)) >= 0.5 else -1.0
+        for t in set(reference.cell_type)
+    }
+    sign = np.array(
+        [majority.get(t, float(s)) for t, s in zip(circuit.cell_type, circuit.sign, strict=True)]
+    )
+    return replace(circuit, sign=sign, topology=f"{circuit.topology}+consensus_signs")
