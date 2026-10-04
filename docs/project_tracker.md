@@ -132,5 +132,5 @@ last_updated: 2026-10-04
 | F1a-07 | F1a-v4：低噪声确认实验（预注册，seeds 30–39） | DONE | G1 +16.6pp、G2 +17.3pp、G3 +2.8pp 均支持；G4 不等价 |
 | F1b | 多巴胺门控 surprise 学习（预注册，seeds 40–49） | DONE | H1 预测误差门控 +20.5pp 支持；H2 全局 surprise 不支持；H3 非劣；H4 不支持（`docs/fly/F1b-report.md`） |
 | F1c | 中央复合体环形吸引子（预注册，seeds 50–59） | DONE | 结构：仅真实接线呈环（谱间隙）；动力学：均匀参数速率模型 J1–J3 全部不支持（`docs/fly/F1c-report.md`） |
-| F1c-v2 | 训练细胞类型参数的环形吸引子 | NOT_STARTED | — |
+| F1c-v2 | 训练细胞类型参数的环形吸引子（预注册，seeds 60–69） | INVALID | 三张图的训练都退化为全网静默，损失停在机会水平；不构成拓扑证据，需要新协议 |
 | F1d | 真实气味统计（DoOR） | NOT_STARTED | 需批准下载 |

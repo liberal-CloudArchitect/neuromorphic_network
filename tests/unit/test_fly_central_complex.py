@@ -15,6 +15,7 @@ from neuromorphic.fly.central_complex import (
     ring_embedding,
     simulate_memory,
     template_accuracy,
+    train_type_parameters,
     type_preserving,
 )
 
@@ -127,3 +128,23 @@ def test_template_accuracy_and_cue_bins() -> None:
     assert template_accuracy(templates, tests, torch.tensor([0, 1, 1])) == pytest.approx(2 / 3)
     bins = cue_bins(np.array([-math.pi, -0.1, 0.1, math.pi - 1e-9]), 4)
     assert bins.tolist() == [0, 1, 2, 3]
+
+
+def test_type_training_keeps_topology_and_reduces_loss() -> None:
+    ring = _ring()
+    protocol = MemoryProtocol(baseline_ms=5, cue_ms=20, delay_ms=60, readout_ms=20, noise_sd=0.01)
+    epg = ring.indices("EPG")
+    cues = torch.zeros(4, ring.n)
+    for k in range(4):
+        cues[k, epg[k * 4 : k * 4 + 4]] = 1.0
+    before = ring.counts().copy()
+    params, history = train_type_parameters(
+        ring, cues, epg, seed=0, steps=25, lr=0.1, trials_per_cue=2, protocol=protocol
+    )
+    np.testing.assert_array_equal(ring.counts(), before)
+    assert params.types == ("Delta7", "EPG")
+    assert np.isfinite(history).all()
+    assert np.mean(history[-5:]) < np.mean(history[:5])
+    gain, bias = params.per_neuron(ring)
+    assert gain.shape == (ring.n,) and bias.shape == (ring.n,)
+    assert torch.all(gain > 0)

@@ -245,8 +245,10 @@ def simulate_memory(
     """Simulate a batch of trials; returns late-delay and cue-period mean rates.
 
     ``cue_inputs`` is ``[batch, neurons]`` (zero outside cued neurons);
-    ``gain`` and ``bias`` are per-trial ``[batch]`` so parameter grids can share
-    one batch.  Dynamics: ``tau dr/dt = -r + max(0, tanh(g W r + b + I + noise))``.
+    ``gain`` and ``bias`` are either per-trial ``[batch]`` (so parameter grids
+    can share one batch) or per-neuron ``[batch, neurons]``.  Dynamics:
+    ``tau dr/dt = -r + max(0, tanh(g * (W r) + b + I + noise))``; the function
+    is differentiable with respect to ``gain`` and ``bias``.
     """
 
     batch, neurons = cue_inputs.shape
@@ -260,8 +262,8 @@ def simulate_memory(
     cue_sum = torch.zeros(batch, neurons)
     late_sum = torch.zeros(batch, neurons)
     late_start = protocol.delay_ms - protocol.readout_ms
-    g = gain[:, None]
-    b = bias[:, None]
+    g = gain[:, None] if gain.dim() == 1 else gain
+    b = bias[:, None] if bias.dim() == 1 else bias
     for phase, (duration, cued) in enumerate(phases):
         steps = round(duration / protocol.dt_ms)
         for t in range(steps):
@@ -271,9 +273,9 @@ def simulate_memory(
             noise = torch.randn(batch, neurons, generator=generator) * protocol.noise_sd
             rate = rate + step * (-rate + torch.tanh(drive + noise).clamp(min=0.0))
             if cued:
-                cue_sum += rate
+                cue_sum = cue_sum + rate
             if phase == 2 and t * protocol.dt_ms >= late_start:
-                late_sum += rate
+                late_sum = late_sum + rate
     readout_steps = round(protocol.readout_ms / protocol.dt_ms)
     cue_steps = round(protocol.cue_ms / protocol.dt_ms)
     return late_sum / readout_steps, cue_sum / cue_steps
@@ -299,3 +301,66 @@ def template_accuracy(templates: Tensor, tests: Tensor, labels: Tensor) -> float
     predicted = scores.argmax(dim=1)
     correct = (predicted == labels) & x_ok & t_ok.any()
     return float(correct.float().mean())
+
+
+@dataclass(frozen=True, slots=True)
+class TypeParameters:
+    """Per-cell-type gain ``exp(log_gain)`` and bias for postsynaptic neurons."""
+
+    types: tuple[str, ...]
+    log_gain: Tensor
+    bias: Tensor
+
+    def per_neuron(self, circuit: CXCircuit) -> tuple[Tensor, Tensor]:
+        code = torch.tensor([self.types.index(t) for t in circuit.cell_type])
+        return torch.exp(self.log_gain)[code], self.bias[code]
+
+
+def train_type_parameters(
+    circuit: CXCircuit,
+    cue_inputs: Tensor,
+    readout: IntArray,
+    *,
+    seed: int,
+    steps: int = 200,
+    lr: float = 0.05,
+    trials_per_cue: int = 4,
+    clip: float = 1.0,
+    protocol: MemoryProtocol | None = None,
+) -> tuple[TypeParameters, list[float]]:
+    """Fit cell-type gains/biases by BPTT on a cue-memory objective.
+
+    The connectome (topology and synapse counts) stays fixed.  An auxiliary
+    linear decoder reads the late-delay activity of ``readout`` neurons during
+    training only; evaluation must not use it.
+    """
+
+    protocol = protocol or MemoryProtocol()
+    types = tuple(sorted(set(circuit.cell_type)))
+    code = torch.tensor([types.index(t) for t in circuit.cell_type])
+    weights = torch.as_tensor(circuit.weights(), dtype=torch.float32)
+    log_gain = torch.zeros(len(types), requires_grad=True)
+    bias = torch.zeros(len(types), requires_grad=True)
+    torch.manual_seed(seed)
+    decoder = torch.nn.Linear(readout.size, cue_inputs.shape[0])
+    parameters = [log_gain, bias, *decoder.parameters()]
+    optimizer = torch.optim.Adam(parameters, lr=lr)
+    generator = torch.Generator().manual_seed(seed)
+    labels = torch.arange(cue_inputs.shape[0]).repeat_interleave(trials_per_cue)
+    cues = cue_inputs.repeat_interleave(trials_per_cue, dim=0)
+    index = torch.as_tensor(readout)
+    history: list[float] = []
+    for _ in range(steps):
+        batch = cues.shape[0]
+        gain = torch.exp(log_gain)[code].expand(batch, -1)
+        offset = bias[code].expand(batch, -1)
+        late, _ = simulate_memory(
+            weights, cues, gain, offset, protocol=protocol, generator=generator
+        )
+        loss = torch.nn.functional.cross_entropy(decoder(late[:, index]), labels)
+        optimizer.zero_grad()
+        loss.backward()  # type: ignore[no-untyped-call]
+        torch.nn.utils.clip_grad_norm_(parameters, clip)
+        optimizer.step()
+        history.append(float(loss))
+    return TypeParameters(types, log_gain.detach().clone(), bias.detach().clone()), history
