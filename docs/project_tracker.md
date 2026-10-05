@@ -18,7 +18,7 @@ last_updated: 2026-10-04
 | P3 因果、泛化与网络 MVP | DONE | GATE-3 PASSED / GATE-NN-MVP FAILED | 科研矩阵完整；当前网络未取得 MVP 资格 |
 | P4 预测闭环与语义稀疏路由 | DONE | GATE-4-MECH-CUDA FAILED | 24-cell CUDA mechanism 完整执行；预测因果与稀疏最坏 seed 非劣性被否证，禁止进入 full |
 | P5 预测 surprise 与稳定语义路由 | IN_PROGRESS | qualification pending | v3 模块与 CPU qualification 已落盘，待 clean SHA MPS/CUDA/CI 闭环 |
-| F 果蝇连接组探索支线 | IN_PROGRESS | 无（exploratory） | `CR-013` 提议（状态待批准）；F0 完成；F1 主体完成（26 轮，见 `docs/fly/F1-summary.md` 与 CR-013 的 F1 附录）：蘑菇体局部关联读出防遗忘、多峰类别下稀疏扩展、预测误差门控、突触标签式巩固获支持；中央复合体真实拓扑支持朝向记忆（FlyWire 与 hemibrain，后者需按类型统一递质符号）、可塑输入映射、路径积分（hemibrain），PEN→EPG 偏移为因果成分；未获支持：单峰类别下稀疏码优势、全局 surprise 调制、嗅小球采样偏好、MBON→DAN 回路实现 RPE 或无标签巩固；结果不计入任何 Gate |
+| F 果蝇连接组探索支线 | IN_PROGRESS | 无（exploratory） | `CR-013` 提议（状态待批准）；F0 完成；F1 主体完成（27 轮，见 `docs/fly/F1-summary.md` 与 CR-013 的 F1 附录）：蘑菇体局部关联读出防遗忘、多峰类别下稀疏扩展、预测误差门控、突触标签式巩固获支持；中央复合体真实拓扑支持朝向记忆（FlyWire 与 hemibrain，后者需按类型统一递质符号）、可塑输入映射、路径积分（hemibrain），PEN→EPG 偏移为因果成分；未获支持：单峰类别下稀疏码优势、全局 surprise 调制、嗅小球采样偏好、MBON→DAN 回路实现 RPE 或无标签巩固；结果不计入任何 Gate |
 
 ## P2 工作项
 
@@ -152,4 +152,5 @@ last_updated: 2026-10-04
 | F1p | hemibrain 路径积分（统一递质符号，seeds 210–219） | DONE | Q1 LNO 驱动 J +0.622、Q3 比 type_preserving 高 +0.618、Q4 PEN 驱动 J +0.628 支持：路径积分首次复现；Q2、Q5 偏移消融未通过（消融取整不干净，消融后方向反转 9/10）（`docs/fly/F1p-report.md`） |
 | F1q | PEN→EPG 映射的因果检验（seeds 220–229） | DONE | R1 方向与结构一致 +0.578、R3/R6 打乱 PEN→EPG 取消转动（+0.573、+0.490，记忆仍 0.91）、R4/R7 镜像使方向反转（+0.362、+0.496）均支持；R2/R5 去偏移未通过，因标签坐标与 EB 交错半格、实际留下反向偏移（`docs/fly/F1q-report.md`） |
 | F1r | 路径积分的积分精度（F1p 解，seeds 210–219） | DONE | T1/T3 持续性均值 0.44/0.41、T2 LNO 分级 0.39 未达门槛；T4 PEN 分级 +0.943 支持；每种驱动 4/10 个 seed 为恒速、速度分级的积分器（R² 0.97–1.00，1–3.6 rad/s），其余为一次性位移（`docs/fly/F1r-report.md`） |
+| F1s | 以积分为目标的搜索（seeds 230–239） | DONE | S2 LNO real − type_preserving +0.414、S3 real − pen_shuffled +0.336 支持；S1 real 均值 0.478 低于 0.5；PEN 驱动 S4/S5 不支持，S6 因对照门 INVALID；LNO 下真实接线 6/10 个 seed 找到积分器，零模型 0/10（`docs/fly/F1s-report.md`） |
 | F1-SUM | F1 阶段总结与主线迁移建议 | DONE | `docs/fly/F1-summary.md` |
