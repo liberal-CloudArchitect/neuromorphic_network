@@ -22,6 +22,8 @@ from neuromorphic.fly.central_complex import (
     ring_embedding,
     shuffle_block,
     simulate_memory,
+    simulate_phases,
+    simulate_trace,
     template_accuracy,
     train_type_parameters,
     type_composition,
@@ -367,3 +369,37 @@ def test_shuffle_block_only_moves_pen_to_epg_edges() -> None:
     assert np.array_equal(shuffled.edge_post[~block], ring.edge_post[~block])
     assert not np.array_equal(shuffled.edge_post[block], ring.edge_post[block])
     assert np.array_equal(np.sort(shuffled.edge_post[block]), np.sort(ring.edge_post[block]))
+
+
+def test_simulate_trace_matches_phase_readout() -> None:
+    ring = ideal_ring_circuit(16, 4)
+    weights = torch.as_tensor(ring.weights(), dtype=torch.float32)
+    gain = torch.full((2, ring.n), 2.0)
+    bias = torch.full((2, ring.n), -0.2)
+    cue = torch.zeros(2, ring.n)
+    cue[:, :3] = 1.0
+    phases = [(20, None), (30, cue), (50, None)]
+    protocol = MemoryProtocol()
+    epg = ring.indices("EPG")
+    trace = simulate_trace(
+        weights,
+        gain,
+        bias,
+        phases,
+        record_every=10,
+        neurons=epg,
+        protocol=protocol,
+        generator=torch.Generator().manual_seed(4),
+    )
+    assert trace.shape == (2, 10, epg.size)
+    mean = simulate_phases(
+        weights,
+        gain,
+        bias,
+        phases,
+        readout_phase=2,
+        readout_ms=1,
+        protocol=protocol,
+        generator=torch.Generator().manual_seed(4),
+    )
+    torch.testing.assert_close(trace[:, -1], mean[:, epg])

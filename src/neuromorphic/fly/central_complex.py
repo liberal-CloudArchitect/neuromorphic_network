@@ -873,3 +873,40 @@ def remap_offsets(
         edge_count=np.array([merged[k] for k in keys]),
         topology=f"offset_{mode}",
     )
+
+
+def simulate_trace(
+    weights: Tensor,
+    gain: Tensor,
+    bias: Tensor,
+    phases: list[tuple[int, Tensor | None]],
+    *,
+    record_every: int,
+    neurons: IntArray,
+    protocol: MemoryProtocol,
+    generator: torch.Generator,
+) -> Tensor:
+    """Run phases as :func:`simulate_phases` and record ``neurons`` every ``record_every`` steps.
+
+    Returns rates ``[batch, records, len(neurons)]``; record ``k`` is taken after
+    step ``(k + 1) * record_every`` counted over all phases (F1r time courses).
+    """
+
+    batch, n = gain.shape
+    device = gain.device
+    rate = torch.zeros(batch, n, device=device)
+    step = protocol.dt_ms / protocol.tau_ms
+    index = torch.as_tensor(neurons, device=device)
+    records: list[Tensor] = []
+    counter = 0
+    for duration, external in phases:
+        for _ in range(round(duration / protocol.dt_ms)):
+            drive = gain * (rate @ weights.T) + bias
+            if external is not None:
+                drive = drive + external
+            noise = torch.randn(batch, n, generator=generator, device=device) * protocol.noise_sd
+            rate = rate + step * (-rate + _activate(drive + noise, protocol.activation))
+            counter += 1
+            if counter % record_every == 0:
+                records.append(rate[:, index])
+    return torch.stack(records, dim=1)
