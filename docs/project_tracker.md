@@ -18,7 +18,7 @@ last_updated: 2026-10-04
 | P3 因果、泛化与网络 MVP | DONE | GATE-3 PASSED / GATE-NN-MVP FAILED | 科研矩阵完整；当前网络未取得 MVP 资格 |
 | P4 预测闭环与语义稀疏路由 | DONE | GATE-4-MECH-CUDA FAILED | 24-cell CUDA mechanism 完整执行；预测因果与稀疏最坏 seed 非劣性被否证，禁止进入 full |
 | P5 预测 surprise 与稳定语义路由 | IN_PROGRESS | qualification pending | v3 模块与 CPU qualification 已落盘，待 clean SHA MPS/CUDA/CI 闭环 |
-| F 果蝇连接组探索支线 | IN_PROGRESS | 无（exploratory） | `CR-013` 提议；F0 完成；F1a 系列（v1–v4）完成（`docs/fly/F1a-report.md`）：局部关联规则防遗忘获支持；稀疏码仅在低噪声多峰类别下优于原型学习（确认实验通过）；真实接线无拓扑优势；F1b 预测误差门控可塑性获支持；F1c 环结构仅存在于真实接线但均匀参数下无吸引子；F1d 真实气味下采样偏好无判别收益；总结见 `docs/fly/F1-summary.md`；结果不计入任何 Gate |
+| F 果蝇连接组探索支线 | IN_PROGRESS | 无（exploratory） | `CR-013` 提议（状态待批准）；F0 完成；F1 主体完成（25 轮，见 `docs/fly/F1-summary.md` 与 CR-013 的 F1 附录）：蘑菇体局部关联读出防遗忘、多峰类别下稀疏扩展、预测误差门控、突触标签式巩固获支持；中央复合体真实拓扑支持朝向记忆（FlyWire 与 hemibrain，后者需按类型统一递质符号）、可塑输入映射、路径积分（hemibrain），PEN→EPG 偏移为因果成分；未获支持：单峰类别下稀疏码优势、全局 surprise 调制、嗅小球采样偏好、MBON→DAN 回路实现 RPE 或无标签巩固；结果不计入任何 Gate |
 
 ## P2 工作项
 
@@ -145,8 +145,8 @@ last_updated: 2026-10-04
 | F1i | 可塑 ER→EPG 视觉映射与 LNO 驱动转动（seeds 140–149） | DONE | I1 学习映射比解剖映射记忆高 26.8pp、I2 比 type_preserving 高 26.4pp，均支持；I3/I4 转动不支持；I5 按字面支持但转动量为噪声级（`docs/fly/F1i-report.md`） |
 | F1j | 正反馈 MBON→DAN 回路的功能（共用参数网格，seeds 150–159） | DONE | J1 特异巩固被否证（−0.038，方向相反）；J2/J3 共模漂移支持（新异气味偏向趋近 +0.098，符号取反则反向）；J4 不依赖真实接线（重连漂移更强）；J5 略低于门槛（`docs/fly/F1j-report.md`） |
 | F1k | 记忆特异的 MBON→DAN 回路：KC 侧突触标签与兴奋性谷氨酸（seeds 170–179） | DONE | K1 标签带来特异巩固 +0.023、K2 消除漂移 +0.068（均支持，24/24 网格点）；K3 不依赖真实接线；K4/K5 兴奋性谷氨酸消除漂移但不巩固；K7 反转代价 +0.018 低于门槛（`docs/fly/F1k-report.md`） |
-| F1l | hemibrain PB 小球相位：结构与路径积分（seeds 160–169） | DONE | S1/S2 按字面未通过（左右 PB 交错半格；PEN 偏移 ±65–70°，一致性 0.998；谱坐标压缩约 5 倍）；P3 INVALID；P1、P2、P4 不支持：路径积分未复现，FlyWire 上的记忆优势未在 hemibrain 重复；发现搜索偏爱静默解（`docs/fly/F1l-report.md`） |
-| F1m | 活动下限修正搜索后，FlyWire 与 hemibrain 的 CX 记忆优势（seeds 180–189） | DONE | M1 FlyWire 突触数 +0.409、M2 二值 +0.279 支持；M3 hemibrain 突触数 +0.025、M4 边数匹配二值 +0.049 不支持 → 数据集特异；下限没有改变任何结论，F1c-v4 不是退化解造成的（`docs/fly/F1m-report.md`） |
+| F1l | hemibrain PB 小球相位：结构与路径积分（seeds 160–169） | DONE | S1/S2 按字面未通过（左右 PB 交错半格；PEN 偏移 ±65–70°，一致性 0.998；谱坐标压缩约 5 倍）；P3 INVALID；P1、P2、P4 不支持：路径积分未复现，FlyWire 上的记忆优势未在 hemibrain 重复；发现搜索偏爱静默解（`docs/fly/F1l-report.md`）；**勘误**：hemibrain 递质标签错误（见 F1n/F1o），P1、P2、P4 不作为否定证据；路径积分见 F1p/F1q |
+| F1m | 活动下限修正搜索后，FlyWire 与 hemibrain 的 CX 记忆优势（seeds 180–189） | DONE | M1 FlyWire 突触数 +0.409、M2 二值 +0.279 支持；M3 hemibrain 突触数 +0.025、M4 边数匹配二值 +0.049 不支持 → 数据集特异；下限没有改变任何结论，F1c-v4 不是退化解造成的（`docs/fly/F1m-report.md`）；**勘误**：M3、M4 来自 hemibrain 递质标签错误，统一符号后成立（F1o） |
 | F1n | 输入组成互换：FlyWire/hemibrain 记忆差异的原因（seeds 190–199） | DONE | N1–N3 不支持：差异不来自类型级组成；事后诊断发现 hemibrain bump 全部钉在同一位置，原因是逐 body 递质预测把 38/46 个 EPG、一半 PEN 标成谷氨酸（`docs/fly/F1n-report.md`） |
 | F1o | 按细胞类型统一递质符号后重测 hemibrain 记忆（seeds 200–209） | DONE | O1 +0.628、O2 +0.309、O3 +0.536 全部支持：hemibrain real 0.961，记忆优势跨数据集成立；F1l/F1m 的 hemibrain 结果已加勘误（`docs/fly/F1o-report.md`） |
 | F1p | hemibrain 路径积分（统一递质符号，seeds 210–219） | DONE | Q1 LNO 驱动 J +0.622、Q3 比 type_preserving 高 +0.618、Q4 PEN 驱动 J +0.628 支持：路径积分首次复现；Q2、Q5 偏移消融未通过（消融取整不干净，消融后方向反转 9/10）（`docs/fly/F1p-report.md`） |
