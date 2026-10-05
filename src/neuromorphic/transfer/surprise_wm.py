@@ -1,0 +1,175 @@
+"""Surprise-gated working memory and compact T1 networks (CR-014).
+
+``SurpriseGatedWorkingMemory`` reproduces the update and read equations of
+``working_memory.v1`` step by step and adds an optional outcome-surprise
+signal ``s_t = |feedback_t - p_t|``, where ``p_t`` is the network's own
+(detached) probability for answer 1 at the preceding query.  Modes:
+
+- ``plain``: the main-network working memory (surprise unused);
+- ``gate``: surprise adds a learned per-slot bias to the update gate only
+  (F1b: prediction error gates the write, not the representation);
+- ``input``: the same surprise enters as an extra input feature instead;
+- ``shuffled``: like ``gate`` but with surprise taken from another episode.
+"""
+
+from __future__ import annotations
+
+from typing import Literal
+
+import torch
+from torch import Tensor, nn
+
+from neuromorphic.core.contracts import ModuleContext
+from neuromorphic.modules.sensory_encoder import SensoryEncoder
+from neuromorphic.tasks.base import TaskBatch
+from neuromorphic.transfer.uncued_switch import FEEDBACK, QUERY
+
+Mode = Literal["plain", "gate", "input", "shuffled"]
+MODES: tuple[Mode, ...] = ("plain", "gate", "input", "shuffled")
+_FEEDBACK_BIT = 10
+
+
+class SurpriseGatedWorkingMemory(nn.Module):
+    """Four learned slots with ``working_memory.v1`` equations plus a surprise channel."""
+
+    def __init__(
+        self,
+        feature_dim: int,
+        *,
+        slots: int = 4,
+        slot_dim: int = 32,
+        mode: Mode = "plain",
+        surprise_init: float = 2.0,
+    ) -> None:
+        super().__init__()
+        if mode not in MODES:
+            raise ValueError(f"unknown mode: {mode}")
+        self.mode = mode
+        self.slots = slots
+        self.slot_dim = slot_dim
+        self.candidate = nn.Linear(feature_dim, slot_dim)
+        self.update_gate = nn.Linear(feature_dim, slots)
+        self.read_query = nn.Linear(feature_dim, slot_dim)
+        self.read_projection = nn.Linear(slot_dim, feature_dim)
+        self.surprise_gate = nn.Parameter(torch.full((slots,), surprise_init))
+        self.surprise_input = nn.Linear(1, feature_dim)
+
+    def initial_slots(self, batch: int, *, device: torch.device) -> Tensor:
+        return torch.zeros(batch, self.slots, self.slot_dim, device=device)
+
+    def step(
+        self, slots: Tensor, representation: Tensor, valid: Tensor, surprise: Tensor
+    ) -> tuple[Tensor, Tensor]:
+        """One causal step; ``surprise`` is ``[B]`` (zero where undefined)."""
+
+        if self.mode == "input":
+            representation = representation + self.surprise_input(surprise[:, None])
+        attention = torch.softmax(
+            torch.einsum("bsd,bd->bs", slots, self.read_query(representation)) / self.slot_dim**0.5,
+            dim=-1,
+        )
+        read = torch.einsum("bs,bsd->bd", attention, slots)
+        enriched = representation + self.read_projection(read)
+        logits = self.update_gate(representation)
+        if self.mode in {"gate", "shuffled"}:
+            logits = logits + surprise[:, None] * self.surprise_gate[None, :]
+        gates = torch.sigmoid(logits) * valid[:, None]
+        candidate = torch.tanh(self.candidate(representation)).unsqueeze(1)
+        updated = slots + gates.unsqueeze(-1) * (candidate - slots)
+        updated = torch.where(valid[:, None, None], updated, slots)
+        return updated, torch.where(valid[:, None], enriched, representation)
+
+
+def selector_head(feature_dim: int) -> nn.Sequential:
+    """``action_selector.v1`` integration core plus its two-class rule-task head."""
+
+    return nn.Sequential(
+        nn.LayerNorm(feature_dim),
+        nn.Linear(feature_dim, feature_dim),
+        nn.GELU(),
+        nn.Linear(feature_dim, 2),
+    )
+
+
+class T1Network(nn.Module):
+    """Adapter -> ``sensory_encoder.v1`` -> surprise-gated working memory -> selector head."""
+
+    def __init__(self, input_dim: int, *, feature_dim: int = 64, mode: Mode = "plain") -> None:
+        super().__init__()
+        self.mode = mode
+        self.adapter = nn.Linear(input_dim, feature_dim)
+        self.encoder = SensoryEncoder(feature_dim=feature_dim)
+        self.memory = SurpriseGatedWorkingMemory(feature_dim, mode=mode)
+        self.head = selector_head(feature_dim)
+
+    def encode(self, batch: TaskBatch) -> Tensor:
+        steps = batch.inputs.shape[1]
+        reset = torch.zeros_like(batch.valid_mask)
+        reset[:, 0] = True
+        context = ModuleContext(
+            task_id="uncued_rule_switch.v1", phase="train", reset_mask=reset, eligible_modules=()
+        )
+        index = torch.arange(steps, device=batch.inputs.device).expand_as(batch.valid_mask)
+        output = self.encoder.forward_inputs(
+            self.adapter(batch.inputs), batch.valid_mask, index, None, context
+        )
+        return output.packet.representation
+
+    def forward(self, batch: TaskBatch) -> Tensor:
+        """Logits ``[B, T, 2]``; surprise is computed causally from own past responses."""
+
+        representation = self.encode(batch)
+        batch_size, steps, _ = representation.shape
+        device = representation.device
+        slots = self.memory.initial_slots(batch_size, device=device)
+        last_answer = torch.full((batch_size,), 0.5, device=device)
+        event = batch.inputs[..., :4].argmax(dim=-1)
+        logits: list[Tensor] = []
+        for t in range(steps):
+            is_feedback = event[:, t].eq(FEEDBACK) & batch.valid_mask[:, t]
+            surprise = torch.where(
+                is_feedback,
+                (batch.inputs[:, t, _FEEDBACK_BIT] - last_answer).abs(),
+                torch.zeros_like(last_answer),
+            )
+            if self.mode == "shuffled" and batch_size > 1:
+                surprise = surprise.roll(1, dims=0)
+            slots, enriched = self.memory.step(
+                slots, representation[:, t], batch.valid_mask[:, t], surprise
+            )
+            step_logits = self.head(enriched)
+            logits.append(step_logits)
+            is_query = event[:, t].eq(QUERY) & batch.valid_mask[:, t]
+            probability = torch.softmax(step_logits, dim=-1)[:, 1].detach()
+            last_answer = torch.where(is_query, probability, last_answer)
+        return torch.stack(logits, dim=1)
+
+
+class T1GRU(nn.Module):
+    """Shared-GRU main baseline: adapter -> GRU -> selector head (same inputs)."""
+
+    def __init__(self, input_dim: int, *, hidden: int = 64) -> None:
+        super().__init__()
+        self.adapter = nn.Linear(input_dim, hidden)
+        self.gru = nn.GRU(hidden, hidden, batch_first=True)
+        self.head = selector_head(hidden)
+
+    def forward(self, batch: TaskBatch) -> Tensor:
+        output, _ = self.gru(self.adapter(batch.inputs))
+        logits: Tensor = self.head(output)
+        return logits
+
+
+def parameter_count(model: nn.Module) -> int:
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+__all__ = [
+    "MODES",
+    "T1GRU",
+    "Mode",
+    "SurpriseGatedWorkingMemory",
+    "T1Network",
+    "parameter_count",
+    "selector_head",
+]
