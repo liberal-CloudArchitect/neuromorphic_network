@@ -149,4 +149,5 @@ last_updated: 2026-10-04
 | F1m | 活动下限修正搜索后，FlyWire 与 hemibrain 的 CX 记忆优势（seeds 180–189） | DONE | M1 FlyWire 突触数 +0.409、M2 二值 +0.279 支持；M3 hemibrain 突触数 +0.025、M4 边数匹配二值 +0.049 不支持 → 数据集特异；下限没有改变任何结论，F1c-v4 不是退化解造成的（`docs/fly/F1m-report.md`） |
 | F1n | 输入组成互换：FlyWire/hemibrain 记忆差异的原因（seeds 190–199） | DONE | N1–N3 不支持：差异不来自类型级组成；事后诊断发现 hemibrain bump 全部钉在同一位置，原因是逐 body 递质预测把 38/46 个 EPG、一半 PEN 标成谷氨酸（`docs/fly/F1n-report.md`） |
 | F1o | 按细胞类型统一递质符号后重测 hemibrain 记忆（seeds 200–209） | DONE | O1 +0.628、O2 +0.309、O3 +0.536 全部支持：hemibrain real 0.961，记忆优势跨数据集成立；F1l/F1m 的 hemibrain 结果已加勘误（`docs/fly/F1o-report.md`） |
+| F1p | hemibrain 路径积分（统一递质符号，seeds 210–219） | DONE | Q1 LNO 驱动 J +0.622、Q3 比 type_preserving 高 +0.618、Q4 PEN 驱动 J +0.628 支持：路径积分首次复现；Q2、Q5 偏移消融未通过（消融取整不干净，消融后方向反转 9/10）（`docs/fly/F1p-report.md`） |
 | F1-SUM | F1 阶段总结与主线迁移建议 | DONE | `docs/fly/F1-summary.md` |
