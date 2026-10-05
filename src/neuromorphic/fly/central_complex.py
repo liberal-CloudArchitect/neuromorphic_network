@@ -794,3 +794,82 @@ def consensus_signs(circuit: CXCircuit, reference: CXCircuit) -> CXCircuit:
         [majority.get(t, float(s)) for t, s in zip(circuit.cell_type, circuit.sign, strict=True)]
     )
     return replace(circuit, sign=sign, topology=f"{circuit.topology}+consensus_signs")
+
+
+PEN_TYPES = ("PEN_a(PEN1)", "PEN_b(PEN2)")
+
+
+def shuffle_block(
+    circuit: CXCircuit,
+    rng: np.random.Generator,
+    *,
+    pre_types: tuple[str, ...] = PEN_TYPES,
+    post_type: str = "EPG",
+    swaps_per_edge: int = 10,
+) -> CXCircuit:
+    """Swap targets only among ``pre_types -> post_type`` edges (F1q).
+
+    Every other edge is untouched; within the block each neuron keeps its degree
+    and edges keep their counts, so only the block's topography is scrambled.
+    """
+
+    types = np.array(circuit.cell_type)
+    block = np.isin(types[circuit.edge_pre], pre_types) & (types[circuit.edge_post] == post_type)
+    group = np.where(block, 0, 1 + np.arange(circuit.edge_pre.size)).astype(np.int64)
+    return _swap_targets(
+        circuit,
+        rng,
+        group_of_edge=group,
+        swaps_per_edge=swaps_per_edge,
+        topology="pen_shuffled",
+    )
+
+
+def remap_offsets(
+    circuit: CXCircuit,
+    angles: FloatArray,
+    *,
+    mode: Literal["zero", "mirror"],
+    pre_types: tuple[str, ...] = PEN_TYPES,
+    post_type: str = "EPG",
+) -> CXCircuit:
+    """Move every ``pre_types -> post_type`` edge to remove or mirror its angular offset (F1q).
+
+    ``angles`` gives every pre neuron's own angle and every post neuron's angle.
+    ``zero`` sends the edge to the post angle equal to the pre neuron's own angle;
+    ``mirror`` sends it to ``2 * own - target``.  The destination is the post group
+    at the nearest angle, keeping the edge's within-angle rank; duplicates merge.
+    """
+
+    if mode not in {"zero", "mirror"}:
+        raise ValueError("mode must be 'zero' or 'mirror'")
+    post = circuit.indices(post_type)
+    rounded = np.round(angles[post], 6)
+    levels = np.unique(rounded)
+    groups = {float(level): post[rounded == level] for level in levels}
+    is_pre = np.isin(np.array(circuit.cell_type), pre_types)
+    is_post = np.zeros(circuit.n, dtype=bool)
+    is_post[post] = True
+    merged: dict[tuple[int, int], float] = {}
+    for p, q, c in zip(
+        circuit.edge_pre.tolist(),
+        circuit.edge_post.tolist(),
+        circuit.edge_count.tolist(),
+        strict=True,
+    ):
+        if is_pre[p] and is_post[q]:
+            source = groups[float(np.round(angles[q], 6))]
+            rank = int(np.flatnonzero(source == q)[0])
+            target = angles[p] if mode == "zero" else 2.0 * angles[p] - angles[q]
+            wrapped = np.angle(np.exp(1j * (levels - target)))
+            destination = groups[float(levels[int(np.argmin(np.abs(wrapped)))])]
+            q = int(destination[rank % destination.size])
+        merged[(p, q)] = merged.get((p, q), 0.0) + c
+    keys = sorted(merged)
+    return replace(
+        circuit,
+        edge_pre=np.array([k[0] for k in keys], dtype=np.int64),
+        edge_post=np.array([k[1] for k in keys], dtype=np.int64),
+        edge_count=np.array([merged[k] for k in keys]),
+        topology=f"offset_{mode}",
+    )

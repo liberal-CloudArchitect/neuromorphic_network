@@ -16,8 +16,11 @@ from neuromorphic.fly.central_complex import (
     degree_preserving_directed,
     extract_cx,
     ideal_ring_circuit,
+    ideal_rotating_ring,
     match_composition,
+    remap_offsets,
     ring_embedding,
+    shuffle_block,
     simulate_memory,
     template_accuracy,
     train_type_parameters,
@@ -322,3 +325,45 @@ def test_consensus_signs_use_each_types_majority() -> None:
     other = replace(ring, cell_type=("EPG",) * 8 + ("PEG",) * 3)
     kept = consensus_signs(noisy, other)
     assert kept.sign[8:].tolist() == [-1.0, 1.0, -1.0]
+
+
+def _rotating_angles(ring: CXCircuit) -> np.ndarray:
+    angles = np.full(ring.n, np.nan)
+    ring_angles = -np.pi + 2 * np.pi * np.arange(48) / 48
+    angles[ring.indices("EPG")] = ring_angles
+    angles[np.array([t.startswith("PEN") for t in ring.cell_type])] = np.tile(ring_angles, 2)
+    return angles
+
+
+def _pen_targets(ring: CXCircuit) -> dict[int, int]:
+    pen = {int(i) for i in np.flatnonzero([t.startswith("PEN") for t in ring.cell_type])}
+    epg = set(ring.indices("EPG").tolist())
+    return {
+        int(p): int(q)
+        for p, q in zip(ring.edge_pre.tolist(), ring.edge_post.tolist(), strict=True)
+        if p in pen and q in epg
+    }
+
+
+def test_remap_offsets_zeroes_and_mirrors_pen_outputs() -> None:
+    ring = ideal_rotating_ring()
+    angles = _rotating_angles(ring)
+    # Left PEN i (index 48 + i) projects to EPG i+1; right PEN i (96 + i) to EPG i-1.
+    assert _pen_targets(ring)[48 + 5] == 6 and _pen_targets(ring)[96 + 5] == 4
+    zeroed = _pen_targets(remap_offsets(ring, angles, mode="zero"))
+    mirrored = _pen_targets(remap_offsets(ring, angles, mode="mirror"))
+    assert zeroed[48 + 5] == 5 and zeroed[96 + 5] == 5
+    assert mirrored[48 + 5] == 4 and mirrored[96 + 5] == 6
+    assert remap_offsets(ring, angles, mode="mirror").edge_count.sum() == ring.edge_count.sum()
+
+
+def test_shuffle_block_only_moves_pen_to_epg_edges() -> None:
+    ring = ideal_rotating_ring()
+    shuffled = shuffle_block(ring, np.random.default_rng(0))
+    types = np.array(ring.cell_type)
+    block = np.isin(types[ring.edge_pre], ["PEN_a(PEN1)", "PEN_b(PEN2)"]) & (
+        types[ring.edge_post] == "EPG"
+    )
+    assert np.array_equal(shuffled.edge_post[~block], ring.edge_post[~block])
+    assert not np.array_equal(shuffled.edge_post[block], ring.edge_post[block])
+    assert np.array_equal(np.sort(shuffled.edge_post[block]), np.sort(ring.edge_post[block]))
