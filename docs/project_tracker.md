@@ -163,4 +163,4 @@ last_updated: 2026-10-04
 | T1 | 预测误差门控的工作记忆写入（无提示规则切换，seeds 501–510） | DONE | H1 +10.9pp、H2 +3.9pp、H3 +9.3pp 支持；H4（相对 GRU，OOD 总体）−2.9pp 不支持（`docs/transfer/T1-report.md`） |
 | T1b | 写入结构 × surprise 门控 2×2 + GRU（seeds 601–610） | DONE | H1 +7.6pp、H3 +11.9pp 支持；H2 不支持；H5、H6 与 GRU 非劣（−0.3pp、−0.05pp）；H4 不支持；探针显示读出增强写入使记忆直接存储更新后的规则（`docs/transfer/T1b-report.md`） |
 | T1c | 多情境无提示切换：槽结构 vs GRU（seeds 701–710） | IN_PROGRESS | 协议已冻结（`docs/transfer/T1c-multi-context-protocol.md`） |
-| T2 | 局部关联读出 + 固定随机编码的类增量防遗忘（seeds 801–810） | IN_PROGRESS | 协议已冻结（`docs/transfer/T2-associative-readout-protocol.md`） |
+| T2 | 局部关联读出 + 固定随机编码的类增量防遗忘（seeds 801–810） | DONE | 相对 `gru_sgd` 最终准确率 +67pp（H1）、遗忘 0.99 → 0.05（H2）；学习规则 +35pp、表示冻结 +55pp、稀疏扩展 +16pp（H3–H5）；优于 EWC（H7）；与回放打平（−0.2pp，H6 不支持，H8 非劣下界 −2.3pp 未通过）（`docs/transfer/T2-report.md`） |
