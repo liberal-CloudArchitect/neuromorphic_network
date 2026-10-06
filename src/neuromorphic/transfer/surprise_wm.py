@@ -114,9 +114,11 @@ class T1Network(nn.Module):
         feature_dim: int = 64,
         mode: Mode = "plain",
         write_source: WriteSource = "current",
+        feedback_bit: int = _FEEDBACK_BIT,
     ) -> None:
         super().__init__()
         self.mode = mode
+        self.feedback_bit = feedback_bit
         self.adapter = nn.Linear(input_dim, feature_dim)
         self.encoder = SensoryEncoder(feature_dim=feature_dim)
         self.memory = SurpriseGatedWorkingMemory(feature_dim, mode=mode, write_source=write_source)
@@ -155,7 +157,7 @@ class T1Network(nn.Module):
             is_feedback = event[:, t].eq(FEEDBACK) & batch.valid_mask[:, t]
             surprise = torch.where(
                 is_feedback,
-                (batch.inputs[:, t, _FEEDBACK_BIT] - last_answer).abs(),
+                (batch.inputs[:, t, self.feedback_bit] - last_answer).abs(),
                 torch.zeros_like(last_answer),
             )
             if self.mode == "shuffled" and batch_size > 1:
