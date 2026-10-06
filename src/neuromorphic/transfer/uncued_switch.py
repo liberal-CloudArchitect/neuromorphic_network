@@ -55,6 +55,7 @@ class _Sample:
     targets: Tensor
     loss_mask: Tensor
     trials_since_switch: Tensor  # per step; -1 except on queries after a switch
+    rules: Tensor  # per step; the rule in force for that step's trial
     switch_trials: tuple[int, ...]
 
 
@@ -104,6 +105,7 @@ class UncuedRuleSwitchTask:
         labels: list[int] = []
         selected: list[bool] = []
         since: list[int] = []
+        rules: list[int] = []
 
         def row(event: int) -> Tensor:
             vector = torch.zeros(self.input_dim, dtype=torch.float32)
@@ -116,6 +118,7 @@ class UncuedRuleSwitchTask:
         labels.append(-100)
         selected.append(False)
         since.append(NOT_AFTER_SWITCH)
+        rules.append(rule)
         last_switch: int | None = None
         for trial in range(trials):
             if trial in switch_trials:
@@ -126,6 +129,7 @@ class UncuedRuleSwitchTask:
                 labels.append(-100)
                 selected.append(False)
                 since.append(NOT_AFTER_SWITCH)
+                rules.append(rule)
             first = self._randint(generator, 0, 2)
             second = self._randint(generator, 0, 2)
             target = answer(rule, first, second)
@@ -136,17 +140,20 @@ class UncuedRuleSwitchTask:
             labels.append(target)
             selected.append(True)
             since.append(NOT_AFTER_SWITCH if last_switch is None else trial - last_switch)
+            rules.append(rule)
             feedback = row(FEEDBACK)
             feedback[_FEEDBACK_BIT] = float(target)
             rows.append(feedback)
             labels.append(-100)
             selected.append(False)
             since.append(NOT_AFTER_SWITCH)
+            rules.append(rule)
         return _Sample(
             inputs=torch.stack(rows),
             targets=torch.tensor(labels, dtype=torch.long),
             loss_mask=torch.tensor(selected, dtype=torch.bool),
             trials_since_switch=torch.tensor(since, dtype=torch.long),
+            rules=torch.tensor(rules, dtype=torch.long),
             switch_trials=switch_trials,
         )
 
@@ -174,6 +181,7 @@ class UncuedRuleSwitchTask:
         loss = torch.zeros((batch, steps), dtype=torch.bool)
         episodes = torch.full((batch, steps), -1, dtype=torch.long)
         since = torch.full((batch, steps), NOT_AFTER_SWITCH, dtype=torch.long)
+        rules = torch.full((batch, steps), -1, dtype=torch.long)
         for b, (index, sample) in enumerate(zip(sample_indices, samples, strict=True)):
             length = sample.inputs.shape[0]
             inputs[b, :length] = sample.inputs
@@ -181,6 +189,7 @@ class UncuedRuleSwitchTask:
             valid[b, :length] = True
             loss[b, :length] = sample.loss_mask
             since[b, :length] = sample.trials_since_switch
+            rules[b, :length] = sample.rules
             episodes[b, :length] = deterministic_seed(
                 self.task_version, split, index, split_seeds=T1_SPLIT_SEEDS
             )
@@ -200,7 +209,7 @@ class UncuedRuleSwitchTask:
                     ",".join(str(t) for t in sample.switch_trials) for sample in samples
                 ),
             },
-            auxiliary_targets={"trials_since_switch": since},
+            auxiliary_targets={"trials_since_switch": since, "rule": rules},
         ).to(device)
 
     def oracle(self, batch: TaskBatch) -> Tensor:
@@ -233,6 +242,36 @@ class UncuedRuleSwitchTask:
                     kept = {r for r in consistent if answer(r, *pending) == observed}
                     consistent = kept or {r for r in range(4) if answer(r, *pending) == observed}
                     pending = None
+        return result
+
+    def consistent_rules(self, batch: TaskBatch) -> Tensor:
+        """The ideal observer's rule set after each valid step, ``[B, T, 4]`` booleans.
+
+        Same update as :meth:`oracle` (T1b): a step's set already includes
+        that step's feedback, so at a feedback step it is what a memory
+        written at that step could at best hold.  Invalid steps are all False.
+        """
+
+        batch.validate()
+        result = torch.zeros((*batch.targets.shape, 4), dtype=torch.bool)
+        inputs = batch.inputs.cpu()
+        for b in range(batch.batch_size):
+            consistent: set[int] = set()
+            pending: tuple[int, int] | None = None
+            for step in range(batch.sequence_length):
+                if not bool(batch.valid_mask[b, step]):
+                    break
+                event = int(inputs[b, step, :4].argmax())
+                if event == CUE:
+                    consistent = {int(inputs[b, step, _RULE].argmax())}
+                elif event == QUERY:
+                    pending = (int(inputs[b, step, _X0]), int(inputs[b, step, _X1]))
+                elif event == FEEDBACK and pending is not None:
+                    observed = int(inputs[b, step, _FEEDBACK_BIT])
+                    kept = {r for r in consistent if answer(r, *pending) == observed}
+                    consistent = kept or {r for r in range(4) if answer(r, *pending) == observed}
+                    pending = None
+                result[b, step, sorted(consistent)] = True
         return result
 
 
