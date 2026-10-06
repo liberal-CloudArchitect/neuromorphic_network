@@ -93,14 +93,14 @@ class SurpriseGatedWorkingMemory(nn.Module):
         return updated, torch.where(valid[:, None], enriched, representation)
 
 
-def selector_head(feature_dim: int) -> nn.Sequential:
-    """``action_selector.v1`` integration core plus its two-class rule-task head."""
+def selector_head(feature_dim: int, classes: int = 2) -> nn.Sequential:
+    """``action_selector.v1`` integration core plus a ``classes``-way head."""
 
     return nn.Sequential(
         nn.LayerNorm(feature_dim),
         nn.Linear(feature_dim, feature_dim),
         nn.GELU(),
-        nn.Linear(feature_dim, 2),
+        nn.Linear(feature_dim, classes),
     )
 
 
