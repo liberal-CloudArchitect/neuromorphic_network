@@ -19,7 +19,7 @@ last_updated: 2026-10-04
 | P4 预测闭环与语义稀疏路由 | DONE | GATE-4-MECH-CUDA FAILED | 24-cell CUDA mechanism 完整执行；预测因果与稀疏最坏 seed 非劣性被否证，禁止进入 full |
 | P5 预测 surprise 与稳定语义路由 | IN_PROGRESS | qualification pending | v3 模块与 CPU qualification 已落盘，待 clean SHA MPS/CUDA/CI 闭环 |
 | F 果蝇连接组探索支线 | IN_PROGRESS | 无（exploratory） | `CR-013` 提议（状态待批准）；F0 完成；F1 主体完成（27 轮，见 `docs/fly/F1-summary.md` 与 CR-013 的 F1 附录）：蘑菇体局部关联读出防遗忘、多峰类别下稀疏扩展、预测误差门控、突触标签式巩固获支持；中央复合体真实拓扑支持朝向记忆（FlyWire 与 hemibrain，后者需按类型统一递质符号）、可塑输入映射、路径积分（hemibrain），PEN→EPG 偏移为因果成分；未获支持：单峰类别下稀疏码优势、全局 surprise 调制、嗅小球采样偏好、MBON→DAN 回路实现 RPE 或无标签巩固；结果不计入任何 Gate |
-| T 果蝇原理迁回主网络 | IN_PROGRESS | 无（exploratory） | `CR-014` 提议（状态待批准）；`neuromorphic.transfer` 子包，不改动 P1–P5；路线 T1 预测误差门控工作记忆（无提示规则切换）→ T2 局部关联读出防遗忘 → T3 环形吸引子状态模块 → T4 标签式巩固 → T5 稀疏扩展编码；T1 完成（`docs/transfer/T1-report.md`）：surprise 门控使工作记忆恢复准确率 +10.9pp（H1）、优于同信息输入 +3.9pp（H2）与打乱信号（H3），10/10 个 seed 学会（plain 5/10）；相对 shared GRU 仍差 2.9pp（H4 不支持）；T1b（写入结构 × surprise 门控 2×2 + GRU，seeds 601–610）协议已冻结（`docs/transfer/T1b-write-structure-protocol.md`） |
+| T 果蝇原理迁回主网络 | IN_PROGRESS | 无（exploratory） | `CR-014` 提议（状态待批准）；`neuromorphic.transfer` 子包，不改动 P1–P5；路线 T1 预测误差门控工作记忆（无提示规则切换）→ T2 局部关联读出防遗忘 → T3 环形吸引子状态模块 → T4 标签式巩固 → T5 稀疏扩展编码；T1 完成（`docs/transfer/T1-report.md`）：surprise 门控使工作记忆恢复准确率 +10.9pp（H1）、优于同信息输入 +3.9pp（H2）与打乱信号（H3），10/10 个 seed 学会（plain 5/10）；相对 shared GRU 仍差 2.9pp（H4 不支持）；T1b 完成（`docs/transfer/T1b-report.md`）：候选写入来自读出增强后的表示时，门控工作记忆恢复 +7.6pp（H1）并与 shared GRU 非劣（H5、H6，差距缩小 96–99%），但不优于 GRU（H4）；无门控时写入改进不提高可靠性（H2 不支持），门控仍有独立贡献（H3）：写入结构决定上限，门控决定可靠性 |
 
 ## P2 工作项
 
@@ -155,3 +155,10 @@ last_updated: 2026-10-04
 | F1r | 路径积分的积分精度（F1p 解，seeds 210–219） | DONE | T1/T3 持续性均值 0.44/0.41、T2 LNO 分级 0.39 未达门槛；T4 PEN 分级 +0.943 支持；每种驱动 4/10 个 seed 为恒速、速度分级的积分器（R² 0.97–1.00，1–3.6 rad/s），其余为一次性位移（`docs/fly/F1r-report.md`） |
 | F1s | 以积分为目标的搜索（seeds 230–239） | DONE | S2 LNO real − type_preserving +0.414、S3 real − pen_shuffled +0.336 支持；S1 real 均值 0.478 低于 0.5；PEN 驱动 S4/S5 不支持，S6 因对照门 INVALID；LNO 下真实接线 6/10 个 seed 找到积分器，零模型 0/10（`docs/fly/F1s-report.md`） |
 | F1-SUM | F1 阶段总结与主线迁移建议 | DONE | `docs/fly/F1-summary.md` |
+
+## T 线工作项（exploratory，CR-014）
+
+| ID | 工作项 | 状态 | 当前证据 |
+|---|---|---|---|
+| T1 | 预测误差门控的工作记忆写入（无提示规则切换，seeds 501–510） | DONE | H1 +10.9pp、H2 +3.9pp、H3 +9.3pp 支持；H4（相对 GRU，OOD 总体）−2.9pp 不支持（`docs/transfer/T1-report.md`） |
+| T1b | 写入结构 × surprise 门控 2×2 + GRU（seeds 601–610） | DONE | H1 +7.6pp、H3 +11.9pp 支持；H2 不支持；H5、H6 与 GRU 非劣（−0.3pp、−0.05pp）；H4 不支持；探针显示读出增强写入使记忆直接存储更新后的规则（`docs/transfer/T1b-report.md`） |
