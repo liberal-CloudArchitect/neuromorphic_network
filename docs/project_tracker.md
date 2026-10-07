@@ -164,3 +164,4 @@ last_updated: 2026-10-04
 | T1b | 写入结构 × surprise 门控 2×2 + GRU（seeds 601–610） | DONE | H1 +7.6pp、H3 +11.9pp 支持；H2 不支持；H5、H6 与 GRU 非劣（−0.3pp、−0.05pp）；H4 不支持；探针显示读出增强写入使记忆直接存储更新后的规则（`docs/transfer/T1b-report.md`） |
 | T1c | 多情境无提示切换：槽结构 vs GRU（seeds 701–710） | DONE | GRU 更好：恢复 −3.6pp、OOD −2.2pp（H1、H2 不支持，H4、H5 非劣不成立）；读出增强写入仍必要（H3 +6.9pp）；槽结构对未切换情境的干扰更小（−0.4pp 对 −1.3pp），但被切换情境的更新更差（`docs/transfer/T1c-report.md`） |
 | T2 | 局部关联读出 + 固定随机编码的类增量防遗忘（seeds 801–810） | DONE | 相对 `gru_sgd` 最终准确率 +67pp（H1）、遗忘 0.99 → 0.05（H2）；学习规则 +35pp、表示冻结 +55pp、稀疏扩展 +16pp（H3–H5）；优于 EWC（H7）；与回放打平（−0.2pp，H6 不支持，H8 非劣下界 −2.3pp 未通过）（`docs/transfer/T2-report.md`） |
+| T1d | 按内容寻址的 surprise 门控（多情境主检验 + 单情境安全检查，seeds 901–910） | IN_PROGRESS | 协议已冻结（`docs/transfer/T1d-addressed-gate-protocol.md`） |
