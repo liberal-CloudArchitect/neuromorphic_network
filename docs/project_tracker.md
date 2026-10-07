@@ -19,7 +19,7 @@ last_updated: 2026-10-04
 | P4 预测闭环与语义稀疏路由 | DONE | GATE-4-MECH-CUDA FAILED | 24-cell CUDA mechanism 完整执行；预测因果与稀疏最坏 seed 非劣性被否证，禁止进入 full |
 | P5 预测 surprise 与稳定语义路由 | IN_PROGRESS | qualification pending | v3 模块与 CPU qualification 已落盘，待 clean SHA MPS/CUDA/CI 闭环 |
 | F 果蝇连接组探索支线 | IN_PROGRESS | 无（exploratory） | `CR-013` 提议（状态待批准）；F0 完成；F1 主体完成（27 轮，见 `docs/fly/F1-summary.md` 与 CR-013 的 F1 附录）：蘑菇体局部关联读出防遗忘、多峰类别下稀疏扩展、预测误差门控、突触标签式巩固获支持；中央复合体真实拓扑支持朝向记忆（FlyWire 与 hemibrain，后者需按类型统一递质符号）、可塑输入映射、路径积分（hemibrain），PEN→EPG 偏移为因果成分；未获支持：单峰类别下稀疏码优势、全局 surprise 调制、嗅小球采样偏好、MBON→DAN 回路实现 RPE 或无标签巩固；结果不计入任何 Gate |
-| T 果蝇原理迁回主网络 | IN_PROGRESS | 无（exploratory） | `CR-014` 提议（状态待批准）；`neuromorphic.transfer` 子包，不改动 P1–P5；路线 T1 预测误差门控工作记忆（无提示规则切换）→ T2 局部关联读出防遗忘 → T3 环形吸引子状态模块 → T4 标签式巩固 → T5 稀疏扩展编码；T1 完成（`docs/transfer/T1-report.md`）：surprise 门控使工作记忆恢复准确率 +10.9pp（H1）、优于同信息输入 +3.9pp（H2）与打乱信号（H3），10/10 个 seed 学会（plain 5/10）；相对 shared GRU 仍差 2.9pp（H4 不支持）；T1b 完成（`docs/transfer/T1b-report.md`）：候选写入来自读出增强后的表示时，门控工作记忆恢复 +7.6pp（H1）并与 shared GRU 非劣（H5、H6，差距缩小 96–99%），但不优于 GRU（H4）；无门控时写入改进不提高可靠性（H2 不支持），门控仍有独立贡献（H3）：写入结构决定上限，门控决定可靠性；T1c：多情境下 GRU 更好（恢复 −3.6pp）；T2 完成：局部关联读出使类增量遗忘 0.99 → 0.05、与回放打平；CR-015（T-Gate）草案待审阅 |
+| T 果蝇原理迁回主网络 | IN_PROGRESS | 无（exploratory） | `CR-014` 提议（状态待批准）；`neuromorphic.transfer` 子包，不改动 P1–P5；路线 T1 预测误差门控工作记忆（无提示规则切换）→ T2 局部关联读出防遗忘 → T3 环形吸引子状态模块 → T4 标签式巩固 → T5 稀疏扩展编码；T1 完成（`docs/transfer/T1-report.md`）：surprise 门控使工作记忆恢复准确率 +10.9pp（H1）、优于同信息输入 +3.9pp（H2）与打乱信号（H3），10/10 个 seed 学会（plain 5/10）；相对 shared GRU 仍差 2.9pp（H4 不支持）；T1b 完成（`docs/transfer/T1b-report.md`）：候选写入来自读出增强后的表示时，门控工作记忆恢复 +7.6pp（H1）并与 shared GRU 非劣（H5、H6，差距缩小 96–99%），但不优于 GRU（H4）；无门控时写入改进不提高可靠性（H2 不支持），门控仍有独立贡献（H3）：写入结构决定上限，门控决定可靠性；T1c：多情境下 GRU 更好（恢复 −3.6pp）；T2 完成：局部关联读出使类增量遗忘 0.99 → 0.05、与回放打平；T1d：按读出注意力寻址的门控没有可靠地修复多情境缺陷（+1.2pp，不显著），对单情境无害；CR-015（T-Gate）草案待审阅 |
 
 ## P2 工作项
 
@@ -164,4 +164,4 @@ last_updated: 2026-10-04
 | T1b | 写入结构 × surprise 门控 2×2 + GRU（seeds 601–610） | DONE | H1 +7.6pp、H3 +11.9pp 支持；H2 不支持；H5、H6 与 GRU 非劣（−0.3pp、−0.05pp）；H4 不支持；探针显示读出增强写入使记忆直接存储更新后的规则（`docs/transfer/T1b-report.md`） |
 | T1c | 多情境无提示切换：槽结构 vs GRU（seeds 701–710） | DONE | GRU 更好：恢复 −3.6pp、OOD −2.2pp（H1、H2 不支持，H4、H5 非劣不成立）；读出增强写入仍必要（H3 +6.9pp）；槽结构对未切换情境的干扰更小（−0.4pp 对 −1.3pp），但被切换情境的更新更差（`docs/transfer/T1c-report.md`） |
 | T2 | 局部关联读出 + 固定随机编码的类增量防遗忘（seeds 801–810） | DONE | 相对 `gru_sgd` 最终准确率 +67pp（H1）、遗忘 0.99 → 0.05（H2）；学习规则 +35pp、表示冻结 +55pp、稀疏扩展 +16pp（H3–H5）；优于 EWC（H7）；与回放打平（−0.2pp，H6 不支持，H8 非劣下界 −2.3pp 未通过）（`docs/transfer/T2-report.md`） |
-| T1d | 按内容寻址的 surprise 门控（多情境主检验 + 单情境安全检查，seeds 901–910） | IN_PROGRESS | 协议已冻结（`docs/transfer/T1d-addressed-gate-protocol.md`） |
+| T1d | 按内容寻址的 surprise 门控（多情境主检验 + 单情境安全检查，seeds 901–910） | DONE | H1 不支持：寻址比全局门控高 1.2pp（CI 含 0）；多情境仍比 GRU 低 2.5pp（H3、H4 非劣不成立）；单情境无害（H5、H6 非劣）；按预设规则 CR-015 保留全局门控（`docs/transfer/T1d-report.md`） |
