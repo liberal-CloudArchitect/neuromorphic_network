@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 import torch
 from torch import Tensor, nn
@@ -35,6 +36,7 @@ class PredictiveAdapterV3(PredictiveAdapterV2):
 
     module_id = PREDICTIVE_ADAPTER_V3
     state_version = "predictive-state-v3"
+    goal_feature_dim: ClassVar[int] = 8
 
     def __init__(
         self, feature_dim: int = 128, action_count: int = 32, action_dim: int = 32
@@ -47,7 +49,7 @@ class PredictiveAdapterV3(PredictiveAdapterV2):
         self.action_embedding = nn.Embedding(action_count, action_dim)
         self.target_norm = nn.LayerNorm(feature_dim, elementwise_affine=False)
         self.transition_delta = nn.Sequential(
-            nn.Linear(feature_dim + action_dim + 8, feature_dim),
+            nn.Linear(feature_dim + action_dim + self.goal_feature_dim, feature_dim),
             nn.GELU(),
             nn.Linear(feature_dim, feature_dim),
         )
@@ -122,6 +124,11 @@ class PredictiveAdapterV3(PredictiveAdapterV2):
             surprise=surprise,
         )
 
+    def _goal_features(self, goal: Tensor) -> Tensor:
+        """Event and task channels of one step's goal context."""
+
+        return torch.cat((goal[..., _EVENT], goal[..., _TASK]), dim=-1)
+
     def commit(
         self,
         packet: BrainPacket,
@@ -149,7 +156,7 @@ class PredictiveAdapterV3(PredictiveAdapterV2):
         safe_action = action.clamp(0, self.action_count - 1)
         action_valid = action.ge(0) & action.lt(self.action_count) & valid
         action_features = self.action_embedding(safe_action) * action_valid.unsqueeze(-1)
-        goal_features = torch.cat((goal[:, 0, _EVENT], goal[:, 0, _TASK]), dim=-1)
+        goal_features = self._goal_features(goal[:, 0])
         predicted_delta = 0.25 * torch.tanh(
             self.transition_delta(torch.cat((target, action_features, goal_features), dim=-1))
         )

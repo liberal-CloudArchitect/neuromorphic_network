@@ -20,7 +20,7 @@ last_updated: 2026-10-29
 | P5 预测 surprise 与稳定语义路由 | IN_PROGRESS | qualification pending | v3 模块与 CPU qualification 已落盘，待 clean SHA MPS/CUDA/CI 闭环 |
 | F 果蝇连接组探索支线 | IN_PROGRESS | 无（exploratory） | `CR-013` 提议（状态待批准）；F0 完成；F1 主体完成（27 轮，见 `docs/fly/F1-summary.md` 与 CR-013 的 F1 附录）：蘑菇体局部关联读出防遗忘、多峰类别下稀疏扩展、预测误差门控、突触标签式巩固获支持；中央复合体真实拓扑支持朝向记忆（FlyWire 与 hemibrain，后者需按类型统一递质符号）、可塑输入映射、路径积分（hemibrain），PEN→EPG 偏移为因果成分；未获支持：单峰类别下稀疏码优势、全局 surprise 调制、嗅小球采样偏好、MBON→DAN 回路实现 RPE 或无标签巩固；结果不计入任何 Gate |
 | T 果蝇原理迁回主网络 | IN_PROGRESS | 无（exploratory） | `CR-014` 提议（状态待批准）；`neuromorphic.transfer` 子包，不改动 P1–P5；路线 T1 预测误差门控工作记忆（无提示规则切换）→ T2 局部关联读出防遗忘 → T3 环形吸引子状态模块 → T4 标签式巩固 → T5 稀疏扩展编码；T1 完成（`docs/transfer/T1-report.md`）：surprise 门控使工作记忆恢复准确率 +10.9pp（H1）、优于同信息输入 +3.9pp（H2）与打乱信号（H3），10/10 个 seed 学会（plain 5/10）；相对 shared GRU 仍差 2.9pp（H4 不支持）；T1b 完成（`docs/transfer/T1b-report.md`）：候选写入来自读出增强后的表示时，门控工作记忆恢复 +7.6pp（H1）并与 shared GRU 非劣（H5、H6，差距缩小 96–99%），但不优于 GRU（H4）；无门控时写入改进不提高可靠性（H2 不支持），门控仍有独立贡献（H3）：写入结构决定上限，门控决定可靠性；T1c：多情境下 GRU 更好（恢复 −3.6pp）；T2 完成：局部关联读出使类增量遗忘 0.99 → 0.05、与回放打平；T1d：按读出注意力寻址的门控没有可靠地修复多情境缺陷（+1.2pp，不显著），对单情境无害；CR-015（T-Gate）已于 2026-10-29 批准，转为主线 P6 |
-| P6 T-Gate：读出增强写入 + 预测误差门控工作记忆 | IN_PROGRESS | GATE-6-WM 未运行 | `CR-015` 已批准，`p6-protocol-v1` 已冻结（`docs/p6_implementation_spec.md`）；以 V3 为底座，主检验 M1–M5 + F1，F2–F4 为次要检验，通过不等于 MVP；P6-02 `working_memory.v2` 已实现，尚未接入网络 |
+| P6 T-Gate：读出增强写入 + 预测误差门控工作记忆 | IN_PROGRESS | GATE-6-WM 未运行 | `CR-015` 已批准，`p6-protocol-v1` 已冻结（`docs/p6_implementation_spec.md`）；以 V3 为底座，主检验 M1–M5 + F1，F2–F4 为次要检验，通过不等于 MVP；P6-02、P6-03 完成：`working_memory.v2` 已接入四任务的 `ModularBrainNetworkV4` |
 
 ## P2 工作项
 
@@ -173,7 +173,7 @@ last_updated: 2026-10-29
 |---|---|---|---|
 | P6-01 | 审阅并冻结 CR-015 与 `p6-protocol-v1` | DONE | `docs/change_requests/CR-015.md`、`docs/p6_implementation_spec.md`（ACCEPTED，2026-10-29） |
 | P6-02 | 实现 `working_memory.v2` 并逐元素核对 v1 与 T1b `enr_gate` | DONE | `src/neuromorphic/modules/working_memory_v2.py`、`tests/unit/test_working_memory_v2.py`：候选改回 r_t 且 s ≡ 0（或关门控）时与 v1 逐位相同；默认配置与 T1b `enr_gate` 逐步一致；surprise detach、在 padding 与 reset 步无作用，门控权重与候选均有梯度 |
-| P6-03 | 实现 `ModularBrainNetworkV4` 与 uncued-rule-switch 的 100% working 语义覆盖 | IN_PROGRESS | 勘误 E1（`CR-015`）：第四个任务用第 104 位标识，路由器与预测器使用 P6 变体 |
+| P6-03 | 实现 `ModularBrainNetworkV4` 与 uncued-rule-switch 的 100% working 语义覆盖 | DONE | 勘误 E1（`CR-015`）；`tasks/p6_control.py`（105 维 goal context，第 104 位为 uncued）、`modules/p6_modules.py`（四任务的路由器、预测器、动作头与适配器）、`modules/network_v4.py`（`working_memory` v2/v1、`write_source`、`surprise_gating` 与 `working_surprise` 覆盖全部 mechanism cell）；uncued 有效步 100% 执行工作记忆、dual-route ≤ 25%；P2–P5 只加不改变行为的扩展点，V2/V3 在三个任务上 913 个输出、损失、状态、梯度与路由张量与改动前逐位一致 |
 | P6-04 | 主线任务 `uncued-rule-switch-p6-v1` 与 P6 namespace、split seeds | NOT_STARTED | — |
 | P6-05 | P6 配置、`preset-4`、patience 30 与 mechanism/full registry | NOT_STARTED | — |
 | P6-06 | qualification（含 surprise 相关 ≥ 0.5 与 s_t 分布检查） | NOT_STARTED | — |

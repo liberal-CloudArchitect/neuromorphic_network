@@ -10,8 +10,10 @@ import torch
 from torch import Tensor, nn
 
 from neuromorphic.core.contracts import (
+    BrainModule,
     BrainPacket,
     ModuleContext,
+    ModuleOutput,
     ModuleState,
     Phase,
     TelemetryRecord,
@@ -209,6 +211,8 @@ class ModularBrainNetworkV2(nn.Module):
     module_ids = P4_MODULE_IDS
     predictive_module_id = PREDICTIVE_ADAPTER_V2
     router_module_id = SPARSE_ROUTER_V2
+    optional_expert_ids: tuple[str, ...] = P4_OPTIONAL_EXPERT_IDS
+    working_module_id: str = WORKING_MEMORY
 
     def __init__(
         self,
@@ -227,7 +231,7 @@ class ModularBrainNetworkV2(nn.Module):
             raise ValueError("feature_dim and tbptt_interval must be positive")
         self.feature_dim = feature_dim
         self.tbptt_interval = tbptt_interval
-        self.boundary_adapters = TaskBoundaryAdapters(feature_dim)
+        self.boundary_adapters = self._build_boundary_adapters(feature_dim)
         self.registry = registry or _default_registry_v2(
             feature_dim,
             episodic_slots=episodic_slots,
@@ -237,6 +241,28 @@ class ModularBrainNetworkV2(nn.Module):
             task_embedding_dim=task_embedding_dim,
         )
         self.registry.require_complete(self.module_ids)
+
+    def _build_boundary_adapters(self, feature_dim: int) -> TaskBoundaryAdapters:
+        return TaskBoundaryAdapters(feature_dim)
+
+    def _task_control(self, batch: TaskBatch) -> TaskControl:
+        return task_control_from_batch(batch)
+
+    def _run_expert(
+        self,
+        module_id: str,
+        module: BrainModule,
+        packet: BrainPacket,
+        state: ModuleState,
+        context: ModuleContext,
+        *,
+        indices: Tensor,
+        surprise: Tensor,
+    ) -> ModuleOutput:
+        """Run one routed expert on its selected rows; ``surprise`` covers the full batch."""
+
+        del module_id, indices, surprise
+        return module.forward(packet, state, context)
 
     def initial_state(
         self,
@@ -291,8 +317,10 @@ class ModularBrainNetworkV2(nn.Module):
         state = self._reset_state(state, reset_rows)
         eligible_transitions = valid_rows & state.valid_step_counts.gt(0)
         if working_reset_every_step:
-            working = cast(WorkingMemory, self.registry.get(WORKING_MEMORY))
-            state = state.replace(working.reset_state(state.get(WORKING_MEMORY), valid_rows))
+            working = self.registry.get(self.working_module_id)
+            state = state.replace(
+                working.reset_state(state.get(self.working_module_id), valid_rows)
+            )
 
         step_index = state.valid_step_counts.unsqueeze(1)
         adapted = self.boundary_adapters(inputs, control.task_id)
@@ -387,7 +415,7 @@ class ModularBrainNetworkV2(nn.Module):
             ).sum() / routing_valid.sum().clamp_min(1.0)
         expert_packets: dict[str, BrainPacket] = {}
         selected_counts: dict[str, Tensor] = {}
-        for expert_index, module_id in enumerate(P4_OPTIONAL_EXPERT_IDS):
+        for expert_index, module_id in enumerate(self.optional_expert_ids):
             selected = decision.executed_mask[:, 0, expert_index] & valid_rows
             selected_counts[f"selected.{module_id}"] = selected.sum()
             if module_id == EPISODIC_MEMORY and episodic_off:
@@ -397,10 +425,14 @@ class ModularBrainNetworkV2(nn.Module):
                 continue
             module = self.registry.get(module_id)
             base_state = state.get(module_id)
-            output = module.forward(
+            output = self._run_expert(
+                module_id,
+                module,
                 _slice_packet(predictive_packet, indices),
                 _slice_state(base_state, indices),
                 _slice_context(context, indices),
+                indices=indices,
+                surprise=surprise,
             )
             state = state.replace(_scatter_state(base_state, output.state, indices))
             expert_packets[module_id] = _scatter_packet(predictive_packet, output.packet, indices)
@@ -451,7 +483,7 @@ class ModularBrainNetworkV2(nn.Module):
         active_calls = decision.executed_mask[:, 0].to(inputs.dtype).sum()
         if episodic_off:
             active_calls = active_calls - decision.executed_mask[:, 0, 0].to(inputs.dtype).sum()
-        dense_calls = valid_rows.to(inputs.dtype).sum() * len(P4_OPTIONAL_EXPERT_IDS)
+        dense_calls = valid_rows.to(inputs.dtype).sum() * len(self.optional_expert_ids)
         metrics = {
             **selected_counts,
             "tbptt.detached_rows": detach_mask.sum(),
@@ -509,7 +541,7 @@ class ModularBrainNetworkV2(nn.Module):
 
         batch.validate()
         with trusted_internal_execution():
-            control = task_control_from_batch(batch)
+            control = self._task_control(batch)
             if state is None:
                 state = self.initial_state(
                     batch.batch_size,
@@ -551,7 +583,7 @@ class ModularBrainNetworkV2(nn.Module):
                     task_id=control.task_id,
                     phase=phase,
                     reset_mask=reset.unsqueeze(1),
-                    eligible_modules=P4_OPTIONAL_EXPERT_IDS,
+                    eligible_modules=self.optional_expert_ids,
                     telemetry_enabled=telemetry_enabled,
                 )
                 output = self.forward_step(

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import ClassVar, Literal, cast
 
 import torch
 from torch import Tensor, nn
@@ -57,13 +57,14 @@ class SparseRouterV2(nn.Module):
 
     module_id = SPARSE_ROUTER_V2
     state_version = "router-state-v2"
+    task_count: ClassVar[int] = 3
 
     def __init__(self, feature_dim: int = 128, *, task_embedding_dim: int = 16) -> None:
         super().__init__()
         if min(feature_dim, task_embedding_dim) <= 0:
             raise ValueError("router dimensions must be positive")
         self.feature_dim = feature_dim
-        self.task_embedding = nn.Embedding(3, task_embedding_dim)
+        self.task_embedding = nn.Embedding(self.task_count, task_embedding_dim)
         self.scorer = nn.Linear(feature_dim + task_embedding_dim, len(_EXPERT_IDS))
         self.fusion = nn.Linear(feature_dim, feature_dim)
 

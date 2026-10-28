@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from collections.abc import Mapping
+from typing import ClassVar, Literal
 
 import torch
 from torch import Tensor, nn
@@ -23,6 +24,7 @@ class ActionSelector(nn.Module):
 
     module_id = ACTION_SELECTOR
     state_version = "selector-state-v1"
+    class_counts: ClassVar[Mapping[str, int]] = TASK_CLASS_COUNTS
 
     def __init__(self, feature_dim: int = 128) -> None:
         super().__init__()
@@ -65,7 +67,7 @@ class ActionSelector(nn.Module):
             packet, state, context, module_id=self.module_id, version=self.state_version
         )
         try:
-            class_count = TASK_CLASS_COUNTS[context.task_id]
+            class_count = self.class_counts[context.task_id]
         except KeyError as error:
             raise ValueError(f"unsupported action task: {context.task_id}") from error
         head_name = context.task_id.removesuffix(".v1")

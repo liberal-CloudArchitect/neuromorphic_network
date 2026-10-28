@@ -31,6 +31,7 @@ class SparseRouterV3(SparseRouterV2):
 
     module_id = SPARSE_ROUTER_V3
     state_version = "router-state-v3"
+    expert_ids: tuple[str, ...] = _EXPERT_IDS
 
     def __init__(
         self,
@@ -51,7 +52,7 @@ class SparseRouterV3(SparseRouterV2):
 
     def _scores(self, packet: BrainPacket, surprise: Tensor | None = None) -> Tensor:
         if packet.goal_context is not None and packet.goal_context.shape[-1] >= 72:
-            task_index = packet.goal_context[..., _TASK].argmax(dim=-1)
+            task_index = self._task_index(packet.goal_context)
         else:
             task_index = torch.zeros_like(packet.step_index)
         if surprise is None:
@@ -69,6 +70,10 @@ class SparseRouterV3(SparseRouterV2):
             Tensor,
             self.scorer(torch.cat((packet.representation, task_features, surprise), dim=-1)),
         )
+
+    @staticmethod
+    def _task_index(goal_context: Tensor) -> Tensor:
+        return goal_context[..., _TASK].argmax(dim=-1)
 
     @staticmethod
     def _task_masks(packet: BrainPacket) -> tuple[Tensor, Tensor]:
@@ -205,7 +210,7 @@ class SparseRouterV3(SparseRouterV2):
             module_id=self.module_id,
             version=self.state_version,
         )
-        unknown = set(expert_packets).difference(_EXPERT_IDS)
+        unknown = set(expert_packets).difference(self.expert_ids)
         if unknown:
             raise ValueError(f"combine received unknown experts: {sorted(unknown)}")
         soft = torch.softmax(decision.scores, dim=-1)
@@ -214,7 +219,7 @@ class SparseRouterV3(SparseRouterV2):
         weights = hard.detach() + soft - soft.detach()
         weights = weights * encoder_packet.valid_mask.unsqueeze(-1)
         combined = encoder_packet.representation
-        for index, module_id in enumerate(_EXPERT_IDS):
+        for index, module_id in enumerate(self.expert_ids):
             expert = expert_packets.get(module_id)
             if expert is None:
                 continue

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import ClassVar, Literal, cast
 
 import torch
 from torch import Tensor, nn
@@ -104,19 +104,22 @@ class ModularBrainOutput:
 class TaskBoundaryAdapters(nn.Module):
     """Non-biological projections from each frozen task input into F=128."""
 
+    task_ids: ClassVar[tuple[str, ...]] = TASK_IDS
+    input_dims: ClassVar[Mapping[str, int]] = TASK_INPUT_DIMS
+
     def __init__(self, feature_dim: int = 128) -> None:
         super().__init__()
         self.feature_dim = feature_dim
         self.adapters = nn.ModuleList(
-            nn.Linear(TASK_INPUT_DIMS[task_id], feature_dim) for task_id in TASK_IDS
+            nn.Linear(self.input_dims[task_id], feature_dim) for task_id in self.task_ids
         )
 
     def forward(self, inputs: Tensor, task_id: str) -> Tensor:
-        if task_id not in TASK_IDS:
+        if task_id not in self.task_ids:
             raise ValueError(f"unsupported task_id: {task_id}")
-        if inputs.ndim != 3 or inputs.shape[-1] != TASK_INPUT_DIMS[task_id]:
-            raise ValueError(f"{task_id} inputs must have shape [B, T, {TASK_INPUT_DIMS[task_id]}]")
-        return cast(Tensor, self.adapters[TASK_IDS.index(task_id)](inputs))
+        if inputs.ndim != 3 or inputs.shape[-1] != self.input_dims[task_id]:
+            raise ValueError(f"{task_id} inputs must have shape [B, T, {self.input_dims[task_id]}]")
+        return cast(Tensor, self.adapters[self.task_ids.index(task_id)](inputs))
 
 
 def _default_registry(

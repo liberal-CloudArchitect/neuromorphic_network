@@ -8,7 +8,7 @@ from this boundary.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Final
+from typing import ClassVar, Final
 
 import torch
 from torch import Tensor
@@ -56,7 +56,11 @@ class TaskControl:
 
     ``action_nodes`` is decoded from the SmallGraph observation rather than
     copied from an auxiliary target.  ``-1`` denotes an unavailable slot.
+    Subclasses may extend the task vocabulary and append channels after 104.
     """
+
+    supported_task_ids: ClassVar[tuple[str, ...]] = TASK_IDS
+    goal_context_dim: ClassVar[int] = GOAL_CONTEXT_DIM
 
     task_id: str
     goal_context: Tensor
@@ -65,10 +69,10 @@ class TaskControl:
     action_nodes: Tensor
 
     def __post_init__(self) -> None:
-        if self.task_id not in TASK_IDS:
+        if self.task_id not in self.supported_task_ids:
             raise ValueError(f"unsupported task_id: {self.task_id}")
-        if self.goal_context.ndim != 3 or self.goal_context.shape[-1] != GOAL_CONTEXT_DIM:
-            raise ValueError("goal_context must have shape [B, T, 104]")
+        if self.goal_context.ndim != 3 or self.goal_context.shape[-1] != self.goal_context_dim:
+            raise ValueError(f"goal_context must have shape [B, T, {self.goal_context_dim}]")
         expected = self.goal_context.shape[:2]
         if self.valid_mask.shape != expected or self.loss_mask.shape != expected:
             raise ValueError("valid_mask and loss_mask must have shape [B, T]")
@@ -113,7 +117,7 @@ class TaskControl:
 
         if step < 0 or step >= self.goal_context.shape[1]:
             raise IndexError("step is outside the task control sequence")
-        return TaskControl(
+        return type(self)(
             task_id=self.task_id,
             goal_context=self.goal_context[:, step : step + 1],
             valid_mask=self.valid_mask[:, step : step + 1],
@@ -143,7 +147,10 @@ class TaskControl:
             raise ValueError("action values must be in [0, 31]")
         copied = torch.nn.functional.one_hot(action, ACTION_COPY_DIM).to(self.goal_context.dtype)
         copied = copied * self.valid_mask.unsqueeze(-1)
-        goal_context = torch.cat((self.goal_context[..., :72], copied), dim=-1)
+        goal_context = torch.cat(
+            (self.goal_context[..., :72], copied, self.goal_context[..., GOAL_CONTEXT_DIM:]),
+            dim=-1,
+        )
         return replace(self, goal_context=goal_context)
 
 

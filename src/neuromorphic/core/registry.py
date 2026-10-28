@@ -43,6 +43,15 @@ P5_MODULE_IDS: Final[tuple[str, ...]] = (
     SPARSE_ROUTER_V3,
 )
 
+P6_MODULE_IDS: Final[tuple[str, ...]] = (
+    SENSORY_ENCODER,
+    EPISODIC_MEMORY,
+    WORKING_MEMORY_V2,
+    PREDICTIVE_ADAPTER_V3,
+    ACTION_SELECTOR,
+    SPARSE_ROUTER_V3,
+)
+
 ALL_MODULE_IDS: Final[tuple[str, ...]] = (
     *MODULE_IDS,
     PREDICTIVE_ADAPTER_V2,
@@ -96,6 +105,7 @@ __all__ = [
     "P4_REQUIRED_PATH_IDS",
     "P5_MODULE_IDS",
     "P5_REQUIRED_PATH_IDS",
+    "P6_MODULE_IDS",
     "PREDICTIVE_ADAPTER",
     "PREDICTIVE_ADAPTER_V2",
     "PREDICTIVE_ADAPTER_V3",
