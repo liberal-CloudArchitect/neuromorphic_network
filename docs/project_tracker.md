@@ -175,7 +175,7 @@ last_updated: 2026-10-29
 | P6-02 | 实现 `working_memory.v2` 并逐元素核对 v1 与 T1b `enr_gate` | DONE | `src/neuromorphic/modules/working_memory_v2.py`、`tests/unit/test_working_memory_v2.py`：候选改回 r_t 且 s ≡ 0（或关门控）时与 v1 逐位相同；默认配置与 T1b `enr_gate` 逐步一致；surprise detach、在 padding 与 reset 步无作用，门控权重与候选均有梯度 |
 | P6-03 | 实现 `ModularBrainNetworkV4` 与 uncued-rule-switch 的 100% working 语义覆盖 | DONE | 勘误 E1（`CR-015`）；`tasks/p6_control.py`（105 维 goal context，第 104 位为 uncued）、`modules/p6_modules.py`（四任务的路由器、预测器、动作头与适配器）、`modules/network_v4.py`（`working_memory` v2/v1、`write_source`、`surprise_gating` 与 `working_surprise` 覆盖全部 mechanism cell）；uncued 有效步 100% 执行工作记忆、dual-route ≤ 25%；P2–P5 只加不改变行为的扩展点，V2/V3 在三个任务上 913 个输出、损失、状态、梯度与路由张量与改动前逐位一致 |
 | P6-04 | 主线任务 `uncued-rule-switch-p6-v1` 与 P6 namespace、split seeds | DONE | `tasks/uncued_rule_switch.py`：按 T1 规则重写为主线任务，只存在于 `p6` namespace；换回 T1 的版本与 seed 时，五个 split 的样本、掩码、辅助目标与理想观察者逐位复现 T1；新增 `query_delay` 辅助目标（delay 分层用）。`P6_SPLIT_SEEDS`（31101/32201/33301/34401/35501）；AR、DRS、SmallGraph 新增 `p6` namespace，生成规则同 P5；legacy/P4/P5 的 180 组任务样本与改动前一致 |
-| P6-05 | P6 配置、`preset-4`、patience 30 与 mechanism/full registry | NOT_STARTED | — |
+| P6-05 | P6 配置、`preset-4`、patience 30 与 mechanism/full registry | IN_PROGRESS | 勘误 E2（`CR-015`）：qualification 增加 surprise 有效性训练；基线参数匹配并各自 pilot 选学习率 |
 | P6-06 | qualification（含 surprise 相关 ≥ 0.5 与 s_t 分布检查） | NOT_STARTED | — |
 | P6-07 | validation-only pilot 与 pilot lock | NOT_STARTED | — |
 | P6-08 | 五 seed 30-cell mechanism（Windows CUDA，48h 上限） | NOT_STARTED | — |
