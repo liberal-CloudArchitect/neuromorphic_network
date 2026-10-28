@@ -14,6 +14,7 @@ PREDICTIVE_ADAPTER_V2: Final = "predictive_adapter.v2"
 SPARSE_ROUTER_V2: Final = "sparse_router.v2"
 PREDICTIVE_ADAPTER_V3: Final = "predictive_adapter.v3"
 SPARSE_ROUTER_V3: Final = "sparse_router.v3"
+WORKING_MEMORY_V2: Final = "working_memory.v2"
 
 MODULE_IDS: Final[tuple[str, ...]] = (
     SENSORY_ENCODER,
@@ -48,6 +49,7 @@ ALL_MODULE_IDS: Final[tuple[str, ...]] = (
     SPARSE_ROUTER_V2,
     PREDICTIVE_ADAPTER_V3,
     SPARSE_ROUTER_V3,
+    WORKING_MEMORY_V2,
 )
 
 P4_OPTIONAL_EXPERT_IDS: Final[tuple[str, ...]] = (EPISODIC_MEMORY, WORKING_MEMORY)
@@ -78,7 +80,7 @@ REQUIRED_PATH_IDS: Final[tuple[str, ...]] = (
 
 
 def is_registered_module(module_id: str) -> bool:
-    """Return whether *module_id* belongs to a frozen legacy or P4 graph."""
+    """Return whether *module_id* belongs to a frozen legacy, P4, P5 or P6 module."""
 
     return module_id in ALL_MODULE_IDS
 
@@ -103,5 +105,6 @@ __all__ = [
     "SPARSE_ROUTER_V2",
     "SPARSE_ROUTER_V3",
     "WORKING_MEMORY",
+    "WORKING_MEMORY_V2",
     "is_registered_module",
 ]

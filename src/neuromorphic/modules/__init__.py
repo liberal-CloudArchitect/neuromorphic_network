@@ -11,6 +11,7 @@ from neuromorphic.modules.sensory_encoder import SensoryEncoder
 from neuromorphic.modules.sparse_router import RoutingDecision, SparseRouter
 from neuromorphic.modules.sparse_router_v2 import RoutingDecisionV2, SparseRouterV2
 from neuromorphic.modules.working_memory import WorkingMemory
+from neuromorphic.modules.working_memory_v2 import WorkingMemoryV2
 
 __all__ = [
     "ActionSelector",
@@ -28,4 +29,5 @@ __all__ = [
     "SparseRouter",
     "SparseRouterV2",
     "WorkingMemory",
+    "WorkingMemoryV2",
 ]
