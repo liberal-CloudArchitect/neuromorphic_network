@@ -173,7 +173,7 @@ last_updated: 2026-10-29
 |---|---|---|---|
 | P6-01 | 审阅并冻结 CR-015 与 `p6-protocol-v1` | DONE | `docs/change_requests/CR-015.md`、`docs/p6_implementation_spec.md`（ACCEPTED，2026-10-29） |
 | P6-02 | 实现 `working_memory.v2` 并逐元素核对 v1 与 T1b `enr_gate` | DONE | `src/neuromorphic/modules/working_memory_v2.py`、`tests/unit/test_working_memory_v2.py`：候选改回 r_t 且 s ≡ 0（或关门控）时与 v1 逐位相同；默认配置与 T1b `enr_gate` 逐步一致；surprise detach、在 padding 与 reset 步无作用，门控权重与候选均有梯度 |
-| P6-03 | 实现 `ModularBrainNetworkV4` 与 uncued-rule-switch 的 100% working 语义覆盖 | NOT_STARTED | — |
+| P6-03 | 实现 `ModularBrainNetworkV4` 与 uncued-rule-switch 的 100% working 语义覆盖 | IN_PROGRESS | 勘误 E1（`CR-015`）：第四个任务用第 104 位标识，路由器与预测器使用 P6 变体 |
 | P6-04 | 主线任务 `uncued-rule-switch-p6-v1` 与 P6 namespace、split seeds | NOT_STARTED | — |
 | P6-05 | P6 配置、`preset-4`、patience 30 与 mechanism/full registry | NOT_STARTED | — |
 | P6-06 | qualification（含 surprise 相关 ≥ 0.5 与 s_t 分布检查） | NOT_STARTED | — |
