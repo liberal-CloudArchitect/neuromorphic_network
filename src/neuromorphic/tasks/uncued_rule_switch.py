@@ -277,6 +277,7 @@ __all__ = [
     "BLANK",
     "CUE",
     "FEEDBACK",
+    "FEEDBACK_BIT",
     "QUERY",
     "UncuedRuleSwitchTask",
     "answer",

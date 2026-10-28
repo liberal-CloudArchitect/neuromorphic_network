@@ -1,4 +1,4 @@
-"""Command-line entry point for P1 baselines and P2--P5 experiment suites."""
+"""Command-line entry point for P1 baselines and P2--P6 experiment suites."""
 
 from __future__ import annotations
 
@@ -245,6 +245,22 @@ def main(arguments: list[str] | None = None) -> int:
             from neuromorphic.training.p5_mechanism import execute_p5_mechanism
 
             result = execute_p5_mechanism(load_p5_mechanism_config(parsed.config))
+        elif (
+            isinstance(raw_config, dict)
+            and raw_config.get("schema_version") == "p6-qualification-v1"
+        ):
+            from neuromorphic.training.p6_config import load_p6_qualification_config
+            from neuromorphic.training.p6_suite import execute_p6_qualification
+
+            result = execute_p6_qualification(load_p6_qualification_config(parsed.config))
+        elif (
+            isinstance(raw_config, dict)
+            and raw_config.get("schema_version") == "p6-surprise-check-v1"
+        ):
+            from neuromorphic.training.p6_config import load_p6_surprise_check_config
+            from neuromorphic.training.p6_suite import execute_p6_surprise_check
+
+            result = execute_p6_surprise_check(load_p6_surprise_check_config(parsed.config))
         else:
             result = execute(load_run_config(parsed.config))
     except FloatingPointError as error:
