@@ -6,6 +6,7 @@ from neuromorphic.tasks.control import TaskControl, task_control_from_batch
 from neuromorphic.tasks.delayed_rule_switch import DelayedRuleSwitchTask
 from neuromorphic.tasks.factory import TaskProfile, create_task
 from neuromorphic.tasks.small_graph import SmallGraphTask
+from neuromorphic.tasks.uncued_rule_switch import UncuedRuleSwitchTask
 
 __all__ = [
     "AssociativeRecallTask",
@@ -16,6 +17,7 @@ __all__ = [
     "TaskBatch",
     "TaskControl",
     "TaskProfile",
+    "UncuedRuleSwitchTask",
     "create_task",
     "task_control_from_batch",
 ]

@@ -13,6 +13,7 @@ from neuromorphic.tasks.base import (
     CPU_DEVICE,
     P4_SPLIT_SEEDS,
     P5_SPLIT_SEEDS,
+    P6_SPLIT_SEEDS,
     SPLIT_SEEDS,
     DatasetSplit,
     TaskBatch,
@@ -48,13 +49,14 @@ class DelayedRuleSwitchTask:
             raise ValueError(f"unknown delayed-rule distribution: {distribution}")
         self.profile = profile
         self.distribution = distribution
-        if namespace not in {"legacy", "p4", "p5"}:
+        if namespace not in {"legacy", "p4", "p5", "p6"}:
             raise ValueError(f"unknown task namespace: {namespace}")
         self.namespace = namespace
         self.split_seeds = {
             "legacy": SPLIT_SEEDS,
             "p4": P4_SPLIT_SEEDS,
             "p5": P5_SPLIT_SEEDS,
+            "p6": P6_SPLIT_SEEDS,
         }[namespace]
         self.task_version = (
             "delayed-rule-switch-v1"
@@ -72,6 +74,12 @@ class DelayedRuleSwitchTask:
                 "delayed-rule-switch-p5-v1"
                 if distribution == "v1"
                 else f"delayed-rule-switch-p5-{distribution}-v1"
+            )
+        elif namespace == "p6":
+            self.task_version = (
+                "delayed-rule-switch-p6-v1"
+                if distribution == "v1"
+                else f"delayed-rule-switch-p6-{distribution}-v1"
             )
 
     @staticmethod

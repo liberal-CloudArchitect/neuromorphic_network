@@ -8,14 +8,19 @@ from neuromorphic.tasks.associative_recall import AssociativeRecallTask
 from neuromorphic.tasks.base import SequenceTask
 from neuromorphic.tasks.delayed_rule_switch import DelayedRuleSwitchTask
 from neuromorphic.tasks.small_graph import SmallGraphTask
+from neuromorphic.tasks.uncued_rule_switch import UncuedRuleSwitchTask
 
 type TaskProfile = Literal["smoke", "qualification"]
-type TaskNamespace = Literal["legacy", "p4", "p5"]
+type TaskNamespace = Literal["legacy", "p4", "p5", "p6"]
 
-_TASKS: dict[str, type[AssociativeRecallTask | DelayedRuleSwitchTask | SmallGraphTask]] = {
+_TASKS: dict[
+    str,
+    type[AssociativeRecallTask | DelayedRuleSwitchTask | SmallGraphTask | UncuedRuleSwitchTask],
+] = {
     AssociativeRecallTask.task_id: AssociativeRecallTask,
     DelayedRuleSwitchTask.task_id: DelayedRuleSwitchTask,
     SmallGraphTask.task_id: SmallGraphTask,
+    UncuedRuleSwitchTask.task_id: UncuedRuleSwitchTask,
 }
 
 

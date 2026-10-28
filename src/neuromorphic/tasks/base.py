@@ -40,6 +40,14 @@ P5_SPLIT_SEEDS: Mapping[DatasetSplit, int] = {
     "analysis": 25_501,
 }
 
+P6_SPLIT_SEEDS: Mapping[DatasetSplit, int] = {
+    "train": 31_101,
+    "validation": 32_201,
+    "test": 33_301,
+    "ood": 34_401,
+    "analysis": 35_501,
+}
+
 
 def deterministic_seed(
     task_version: str,

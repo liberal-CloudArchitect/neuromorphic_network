@@ -1,8 +1,4 @@
-"""P6 four-task control and module variants (CR-015, erratum E1).
-
-The uncued batches come from the T track generator, whose input layout the
-mainline P6 task keeps; the mainline generator itself is P6-04.
-"""
+"""P6 four-task control and module variants (CR-015, erratum E1)."""
 
 from __future__ import annotations
 
@@ -38,12 +34,12 @@ from neuromorphic.tasks.p6_control import (
     p6_task_one_hot,
 )
 from neuromorphic.tasks.small_graph import SmallGraphTask
-from neuromorphic.transfer.uncued_switch import FEEDBACK, UncuedRuleSwitchTask
+from neuromorphic.tasks.uncued_rule_switch import FEEDBACK, UncuedRuleSwitchTask
 
 _MAINLINE_TASKS = (
-    AssociativeRecallTask(namespace="p5"),
-    DelayedRuleSwitchTask(namespace="p5"),
-    SmallGraphTask(namespace="p5"),
+    AssociativeRecallTask(namespace="p6"),
+    DelayedRuleSwitchTask(namespace="p6"),
+    SmallGraphTask(namespace="p6"),
 )
 
 

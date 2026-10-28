@@ -1,4 +1,4 @@
-"""The P6 network over four tasks (CR-015).  Uncued batches use the T1 generator."""
+"""The P6 network over the four P6-namespace tasks (CR-015)."""
 
 from __future__ import annotations
 
@@ -21,12 +21,12 @@ from neuromorphic.modules.working_memory_v2 import WorkingMemoryV2
 from neuromorphic.tasks.associative_recall import AssociativeRecallTask
 from neuromorphic.tasks.delayed_rule_switch import DelayedRuleSwitchTask
 from neuromorphic.tasks.small_graph import SmallGraphTask
-from neuromorphic.transfer.uncued_switch import UncuedRuleSwitchTask
+from neuromorphic.tasks.uncued_rule_switch import UncuedRuleSwitchTask
 
 _TASKS = (
-    AssociativeRecallTask(namespace="p5"),
-    DelayedRuleSwitchTask(namespace="p5"),
-    SmallGraphTask(namespace="p5"),
+    AssociativeRecallTask(namespace="p6"),
+    DelayedRuleSwitchTask(namespace="p6"),
+    SmallGraphTask(namespace="p6"),
     UncuedRuleSwitchTask(),
 )
 

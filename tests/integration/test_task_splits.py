@@ -67,6 +67,17 @@ def test_p5_namespace_is_isolated_from_p4_results() -> None:
         assert p4_batch.metadata["content_hashes"] != p5_batch.metadata["content_hashes"]
 
 
+def test_p6_namespace_is_isolated_from_p5_results() -> None:
+    for task_id in TASK_IDS:
+        p5 = create_task(task_id, namespace="p5")
+        p6 = create_task(task_id, namespace="p6")
+        p5_batch = p5.generate("test", [0])
+        p6_batch = p6.generate("test", [0])
+        assert "-p6-" in p6.task_version
+        assert p6_batch.metadata["split_seed"] == 33_301
+        assert p5_batch.metadata["content_hashes"] != p6_batch.metadata["content_hashes"]
+
+
 def test_delayed_switch_profile_matches_the_frozen_protocol() -> None:
     profile = yaml.safe_load(Path("configs/tasks/profiles.yaml").read_text(encoding="utf-8"))
     specification = profile["tasks"]["delayed_rule_switch.v1"]
